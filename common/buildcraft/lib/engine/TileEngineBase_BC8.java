@@ -524,7 +524,7 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
     public IMjReceiver getReceiverToPower(TileEntity tile, EnumFacing side) {
         if (tile == null) return null;
         IMjReceiver rec = tile.getCapability(MjAPI.CAP_RECEIVER, side.getOpposite());
-        if (rec != null && rec.canConnect(mjConnector)) {
+        if (rec != null && rec.canConnect(mjConnector) && mjConnector.canConnect(rec)) {
             return rec;
         } else {
             return null;
@@ -581,7 +581,6 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
     @Override
     @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
-        left.add("");
         left.add("facing = " + currentDirection);
         left.add("heat = " + LocaleUtil.localizeHeat(heat) + " -- " + String.format("%.2f %%", getHeatLevel()));
         left.add("power = " + LocaleUtil.localizeMj(power));

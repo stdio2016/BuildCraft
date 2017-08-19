@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -29,6 +30,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.items.IItemHandlerModifiable;
 
 import buildcraft.api.core.EnumPipePart;
 import buildcraft.api.core.IAreaProvider;
@@ -48,7 +50,6 @@ import buildcraft.lib.net.PacketBufferBC;
 import buildcraft.lib.tile.TileBC_Neptune;
 import buildcraft.lib.tile.item.ItemHandlerManager.EnumAccess;
 import buildcraft.lib.tile.item.ItemHandlerSimple;
-import buildcraft.lib.tile.item.StackInsertionFunction;
 
 import buildcraft.builders.addon.AddonFillingPlanner;
 import buildcraft.builders.filling.Filling;
@@ -65,19 +66,18 @@ import buildcraft.core.marker.volume.WorldSavedDataVolumeBoxes;
 
 public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable, ITileForTemplateBuilder {
     public static final IdAllocator IDS = TileBC_Neptune.IDS.makeChild("filler");
+    @SuppressWarnings("WeakerAccess")
     public static final int NET_INVERTED = IDS.allocId("INVERTED");
+    @SuppressWarnings("WeakerAccess")
     public static final int NET_PARAMETERS = IDS.allocId("PARAMETERS");
+    @SuppressWarnings("WeakerAccess")
     public static final int NET_CAN_EXCAVATE = IDS.allocId("CAN_EXCAVATE");
 
     public final ItemHandlerSimple invResources =
         itemManager.addInvHandler(
             "resources",
-            new ItemHandlerSimple(
-                27,
-                (slot, stack) -> Filling.getItemBlocks().contains(stack.getItem()),
-                StackInsertionFunction.getDefaultInserter(),
-                this::onSlotChange
-            ),
+            27,
+            (slot, stack) -> Filling.getItemBlocks().contains(stack.getItem()),
             EnumAccess.INSERT,
             EnumPipePart.VALUES
         );
@@ -91,10 +91,25 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
     private Template.BuildingInfo buildingInfo;
     private List<IParameter> prevParameters;
     private boolean prevInverted;
-    public TemplateBuilder builder = new TemplateBuilder(this);
+    public final TemplateBuilder builder = new TemplateBuilder(this);
+    private final Runnable updateBuildingInfoListener = () ->
+        Optional.ofNullable(getBuilder()).ifPresent(SnapshotBuilder::updateSnapshot);
 
     public TileFiller() {
         caps.addProvider(new MjCapabilityHelper(new MjBatteryReceiver(battery)));
+    }
+
+    @Override
+    protected void onSlotChange(IItemHandlerModifiable handler,
+                                int slot,
+                                @Nonnull ItemStack before,
+                                @Nonnull ItemStack after) {
+        if (!world.isRemote) {
+            if (handler == invResources) {
+                Optional.ofNullable(getBuilder()).ifPresent(SnapshotBuilder::resourcesChanged);
+            }
+        }
+        super.onSlotChange(handler, slot, before, after);
     }
 
     @Override
@@ -127,7 +142,7 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
                     )
                 );
                 volumeBoxes.markDirty();
-                builder.updateSnapshot();
+                addon.updateBuildingInfo();
             } else {
                 box.reset();
                 box.setMin(volumeBox.box.min());
@@ -168,15 +183,21 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
     public void invalidate() {
         super.invalidate();
         builder.invalidate();
+        if (addon != null) {
+            addon.updateBuildingInfoListeners.remove(updateBuildingInfoListener);
+        }
     }
 
     @Override
     public void update() {
+        battery.tick(getWorld(), getPos());
+        battery.addPowerChecking(64 * MjAPI.MJ, false);
         if (!isValid()) {
             return;
         }
-        battery.tick(getWorld(), getPos());
-        battery.addPowerChecking(64 * MjAPI.MJ, false);
+        if (addon != null) {
+            addon.updateBuildingInfoListeners.add(updateBuildingInfoListener);
+        }
         if (!world.isRemote) {
             if (prevParameters == null ||
                 !Arrays.equals(prevParameters.toArray(), getParameters().toArray()) ||
@@ -198,12 +219,14 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
     }
 
     private void updateBuildingInfo() {
+        Optional.ofNullable(getBuilder()).ifPresent(SnapshotBuilder::cancel);
         buildingInfo = Filling.createBuildingInfo(
             box.min(),
             box.size(),
             parameters,
             inverted
         );
+        Optional.ofNullable(getBuilder()).ifPresent(SnapshotBuilder::updateSnapshot);
     }
 
     public void sendInverted(boolean value) {
@@ -276,7 +299,7 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
                         ? ClientVolumeBoxes.INSTANCE.boxes.stream()
                         .filter(localVolumeBox -> localVolumeBox.id.equals(boxId))
                         .findFirst()
-                        .orElse(null)
+                        .orElseThrow(NullPointerException::new)
                         : WorldSavedDataVolumeBoxes.get(world).getBoxFromId(boxId);
                     addon = (AddonFillingPlanner) volumeBox
                         .addons
@@ -373,6 +396,7 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
             );
         }
         nbt.setBoolean("prevInverted", prevInverted);
+        Optional.ofNullable(getBuilder()).ifPresent(builder -> nbt.setTag("builder", builder.serializeNBT()));
         return nbt;
     }
 
@@ -403,7 +427,10 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
         if (addon == null) {
             updateBuildingInfo();
         }
-        builder.updateSnapshot();
+        if (nbt.hasKey("builder")) {
+            Optional.ofNullable(getBuilder()).ifPresent(SnapshotBuilder::updateSnapshot);
+            Optional.ofNullable(getBuilder()).ifPresent(builder -> builder.deserializeNBT(nbt.getCompoundTag("builder")));
+        }
     }
 
     // Rendering
@@ -430,7 +457,6 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
     @Override
     @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
-        left.add("");
         left.add("battery = " + battery.getDebugString());
         left.add("addon = " + addon);
     }
@@ -457,7 +483,7 @@ public class TileFiller extends TileBC_Neptune implements ITickable, IDebuggable
 
     @Override
     public SnapshotBuilder getBuilder() {
-        return builder;
+        return isValid() ? builder : null;
     }
 
     @Override

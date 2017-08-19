@@ -43,7 +43,12 @@ public class TileAssemblyTable extends TileLaserTableBase {
     public static final IdAllocator IDS = TileBC_Neptune.IDS.makeChild("assembly_table");
     public static final int NET_RECIPE_STATE = IDS.allocId("RECIPE_STATE");
 
-    public final ItemHandlerSimple inv = itemManager.addInvHandler("inv", 3 * 4, ItemHandlerManager.EnumAccess.BOTH, EnumPipePart.VALUES);
+    public final ItemHandlerSimple inv = itemManager.addInvHandler(
+        "inv",
+        3 * 4,
+        ItemHandlerManager.EnumAccess.BOTH,
+        EnumPipePart.VALUES
+    );
     public SortedMap<AssemblyRecipe, EnumAssemblyRecipeState> recipesStates = new TreeMap<>();
 
     @Override
@@ -52,9 +57,10 @@ public class TileAssemblyTable extends TileLaserTableBase {
     }
 
     private void updateRecipes() {
+        int count = recipesStates.size();
         AssemblyRecipeRegistry.INSTANCE.getRecipesFor(inv.stacks).forEach(recipe -> recipesStates.putIfAbsent(recipe, EnumAssemblyRecipeState.POSSIBLE));
         boolean findActive = false;
-        for (Iterator<Map.Entry<AssemblyRecipe, EnumAssemblyRecipeState>> iterator = recipesStates.entrySet().iterator(); iterator.hasNext();) {
+        for (Iterator<Map.Entry<AssemblyRecipe, EnumAssemblyRecipeState>> iterator = recipesStates.entrySet().iterator(); iterator.hasNext(); ) {
             Map.Entry<AssemblyRecipe, EnumAssemblyRecipeState> entry = iterator.next();
             AssemblyRecipe recipe = entry.getKey();
             EnumAssemblyRecipeState state = entry.getValue();
@@ -88,6 +94,9 @@ public class TileAssemblyTable extends TileLaserTableBase {
                     break;
                 }
             }
+        }
+        if (count != recipesStates.size()) {
+            sendNetworkGuiUpdate(NET_GUI_DATA);
         }
     }
 
