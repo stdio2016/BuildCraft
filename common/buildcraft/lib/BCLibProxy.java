@@ -168,10 +168,15 @@ public abstract class BCLibProxy implements IGuiHandler {
                 if (world.isRemote && Minecraft.getMinecraft().isSingleplayer()) {
                     WorldServer server = DimensionManager.getWorld(world.provider.getDimension());
                     if (server == null) return tile;
-                    TileEntity atServer = server.getTileEntity(tile.getPos());
-                    if (atServer == null) return tile;
-                    if (atServer.getClass() == tile.getClass()) {
-                        return (T) atServer;
+                    try {
+                        TileEntity atServer = server.getTileEntity(tile.getPos());
+                        if (atServer == null) return tile;
+                        if (atServer.getClass() == tile.getClass()) {
+                            return (T) atServer;
+                        }
+                    }
+                    catch (IndexOutOfBoundsException e) {
+                        System.out.println("Cannot get server. What's wrong?");
                     }
                 }
             }

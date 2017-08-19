@@ -423,14 +423,22 @@ public final class BlockUtil {
     }
 
     public static boolean blockStatesWithoutBlockEqual(IBlockState a, IBlockState b, Collection<IProperty<?>> ignoredProperties) {
-        return Sets.union(new HashSet<>(a.getPropertyKeys()), new HashSet<>(b.getPropertyKeys())).stream()
-                .filter(property -> !ignoredProperties.contains(property))
-                .allMatch(property -> Objects.equals(a.getValue(property), b.getValue(property)));
+        try {
+            return Sets.union(new HashSet<>(a.getPropertyKeys()), new HashSet<>(b.getPropertyKeys())).stream()
+                    .filter(property -> !ignoredProperties.contains(property))
+                    .allMatch(property -> Objects.equals(a.getValue(property), b.getValue(property)));
+        } catch (IllegalArgumentException x) {
+            return false;
+        }
     }
 
     public static boolean blockStatesWithoutBlockEqual(IBlockState a, IBlockState b) {
-        return Sets.union(new HashSet<>(a.getPropertyKeys()), new HashSet<>(b.getPropertyKeys())).stream()
-                .allMatch(property -> Objects.equals(a.getValue(property), b.getValue(property)));
+        try {
+            return Sets.union(new HashSet<>(a.getPropertyKeys()), new HashSet<>(b.getPropertyKeys())).stream()
+                    .allMatch(property -> Objects.equals(a.getValue(property), b.getValue(property)));
+        } catch (IllegalArgumentException x) {
+            return false;
+        }
     }
 
     public static boolean blockStatesEqual(IBlockState a, IBlockState b, Collection<IProperty<?>> ignoredProperties) {
