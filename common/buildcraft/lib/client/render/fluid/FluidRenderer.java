@@ -13,12 +13,13 @@ import java.util.Map;
 import org.lwjgl.opengl.GL11;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.VertexBuffer;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.profiler.Profiler;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumFacing.Axis;
 import net.minecraft.util.ResourceLocation;
@@ -29,6 +30,8 @@ import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.IFluidTank;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import buildcraft.lib.client.model.MutableVertex;
 import buildcraft.lib.misc.GuiUtil;
@@ -37,10 +40,10 @@ import buildcraft.lib.misc.RenderUtil;
 import buildcraft.lib.misc.VecUtil;
 
 /** Can render 3D fluid cuboid's, up to 1x1x1 in size. Note that they *must* be contained within the 1x1x1 block space -
- * you can't use this to render off large multiblocks.
- * 
- * Not thread safe -- this uses static variables so you should only call this from the main client thread. */
+ * you can't use this to render off large multiblocks. Not thread safe -- this uses static variables so you should only
+ * call this from the main client thread. */
 // TODO: thread safety (per thread context?)
+@SideOnly(Side.CLIENT)
 public class FluidRenderer {
 
     private static final EnumMap<FluidSpriteType, Map<Fluid, TextureAtlasSprite>> fluidSprites =
@@ -49,7 +52,7 @@ public class FluidRenderer {
     private static final boolean[] DEFAULT_FACES = { true, true, true, true, true, true };
 
     // Cached fields that prevent lots of arguments on most methods
-    private static VertexBuffer vb;
+    private static BufferBuilder bb;
     private static TextureAtlasSprite sprite;
     private static TexMap texmap;
     private static boolean invertU, invertV;
@@ -97,14 +100,14 @@ public class FluidRenderer {
      * @param tank The fluid tank that should be rendered.
      * @param min The minimum coordinate that the tank should be rendered from
      * @param max The maximum coordinate that the tank will be rendered to.
-     * @param vbIn The {@link VertexBuffer} that the fluid will be rendered into.
+     * @param bbIn The {@link BufferBuilder} that the fluid will be rendered into.
      * @param sideRender A size 6 boolean array that determines if the face will be rendered. If it is null then all
      *            faces will be rendered. The indexes are determined by what {@link EnumFacing#ordinal()} returns.
      * 
-     * @see #renderFluid(FluidSpriteType, FluidStack, double, double, Vec3d, Vec3d, VertexBuffer, boolean[]) */
-    public static void renderFluid(FluidSpriteType type, IFluidTank tank, Vec3d min, Vec3d max, VertexBuffer vbIn,
+     * @see #renderFluid(FluidSpriteType, FluidStack, double, double, Vec3d, Vec3d, BufferBuilder, boolean[]) */
+    public static void renderFluid(FluidSpriteType type, IFluidTank tank, Vec3d min, Vec3d max, BufferBuilder bbIn,
         boolean[] sideRender) {
-        renderFluid(type, tank.getFluid(), tank.getCapacity(), min, max, vbIn, sideRender);
+        renderFluid(type, tank.getFluid(), tank.getCapacity(), min, max, bbIn, sideRender);
     }
 
     /** Render's a fluid cuboid to the given vertex buffer. The cube shouldn't cross over any {@literal 0->1} boundary
@@ -115,12 +118,12 @@ public class FluidRenderer {
      * @param cap The maximum amount of fluid that could be in the stack. Usually the capacity of the tank.
      * @param min The minimum coordinate that the tank should be rendered from
      * @param max The maximum coordinate that the tank will be rendered to.
-     * @param vbIn The {@link VertexBuffer} that the fluid will be rendered into.
+     * @param bbIn The {@link BufferBuilder} that the fluid will be rendered into.
      * @param sideRender A size 6 boolean array that determines if the face will be rendered. If it is null then all
      *            faces will be rendered. The indexes are determined by what {@link EnumFacing#ordinal()} returns. */
     public static void renderFluid(FluidSpriteType type, FluidStack fluid, int cap, Vec3d min, Vec3d max,
-        VertexBuffer vbIn, boolean[] sideRender) {
-        renderFluid(type, fluid, fluid == null ? 0 : fluid.amount, cap, min, max, vbIn, sideRender);
+                                   BufferBuilder bbIn, boolean[] sideRender) {
+        renderFluid(type, fluid, fluid == null ? 0 : fluid.amount, cap, min, max, bbIn, sideRender);
     }
 
     /** Render's a fluid cuboid to the given vertex buffer. The cube shouldn't cross over any {@literal 0->1} boundary
@@ -133,14 +136,16 @@ public class FluidRenderer {
      * @param cap The maximum amount of fluid that could be in the stack. Usually the capacity of the tank.
      * @param min The minimum coordinate that the tank should be rendered from
      * @param max The maximum coordinate that the tank will be rendered to.
-     * @param vbIn The {@link VertexBuffer} that the fluid will be rendered into.
+     * @param bbIn The {@link BufferBuilder} that the fluid will be rendered into.
      * @param sideRender A size 6 boolean array that determines if the face will be rendered. If it is null then all
      *            faces will be rendered. The indexes are determined by what {@link EnumFacing#ordinal()} returns. */
     public static void renderFluid(FluidSpriteType type, FluidStack fluid, double amount, double cap, Vec3d min,
-        Vec3d max, VertexBuffer vbIn, boolean[] sideRender) {
+        Vec3d max, BufferBuilder bbIn, boolean[] sideRender) {
         if (fluid == null || fluid.getFluid() == null || amount <= 0) {
             return;
         }
+        Profiler prof = Minecraft.getMinecraft().mcProfiler;
+        prof.startSection("fluid");
         if (sideRender == null) {
             sideRender = DEFAULT_FACES;
         }
@@ -148,14 +153,14 @@ public class FluidRenderer {
         double height = MathHelper.clamp(amount / cap, 0, 1);
         final Vec3d realMin, realMax;
         if (fluid.getFluid().isGaseous(fluid)) {
-            realMin = VecUtil.replaceValue(min, Axis.Y, MathUtil.interp(1 - height, min.yCoord, max.yCoord));
+            realMin = VecUtil.replaceValue(min, Axis.Y, MathUtil.interp(1 - height, min.y, max.y));
             realMax = max;
         } else {
             realMin = min;
-            realMax = VecUtil.replaceValue(max, Axis.Y, MathUtil.interp(height, min.yCoord, max.yCoord));
+            realMax = VecUtil.replaceValue(max, Axis.Y, MathUtil.interp(height, min.y, max.y));
         }
 
-        vb = vbIn;
+        bb = bbIn;
 
         if (type == null) {
             type = FluidSpriteType.STILL;
@@ -165,33 +170,33 @@ public class FluidRenderer {
             sprite = Minecraft.getMinecraft().getTextureMapBlocks().getMissingSprite();
         }
 
-        final double xs = realMin.xCoord;
-        final double ys = realMin.yCoord;
-        final double zs = realMin.zCoord;
+        final double xs = realMin.x;
+        final double ys = realMin.y;
+        final double zs = realMin.z;
 
-        final double xb = realMax.xCoord;
-        final double yb = realMax.yCoord;
-        final double zb = realMax.zCoord;
+        final double xb = realMax.x;
+        final double yb = realMax.y;
+        final double zb = realMax.z;
 
         if (type == FluidSpriteType.FROZEN) {
-            if (min.xCoord > 1) {
-                xTexDiff = Math.floor(min.xCoord);
-            } else if (min.xCoord < 0) {
-                xTexDiff = Math.floor(min.xCoord);
+            if (min.x > 1) {
+                xTexDiff = Math.floor(min.x);
+            } else if (min.x < 0) {
+                xTexDiff = Math.floor(min.x);
             } else {
                 xTexDiff = 0;
             }
-            if (min.yCoord > 1) {
-                yTexDiff = Math.floor(min.yCoord);
-            } else if (min.yCoord < 0) {
-                yTexDiff = Math.floor(min.yCoord);
+            if (min.y > 1) {
+                yTexDiff = Math.floor(min.y);
+            } else if (min.y < 0) {
+                yTexDiff = Math.floor(min.y);
             } else {
                 yTexDiff = 0;
             }
-            if (min.zCoord > 1) {
-                zTexDiff = Math.floor(min.zCoord);
-            } else if (min.zCoord < 0) {
-                zTexDiff = Math.floor(min.zCoord);
+            if (min.z > 1) {
+                zTexDiff = Math.floor(min.z);
+            } else if (min.z < 0) {
+                zTexDiff = Math.floor(min.z);
             } else {
                 zTexDiff = 0;
             }
@@ -253,19 +258,20 @@ public class FluidRenderer {
 
         sprite = null;
         texmap = null;
-        vb = null;
+        bb = null;
+        prof.endSection();
     }
 
     /** Helper function to add a vertex. */
     private static void vertex(double x, double y, double z) {
         vertex.positiond(x, y, z);
         texmap.apply(x - xTexDiff, y - yTexDiff, z - zTexDiff);
-        vertex.render(vb);
+        vertex.renderAsBlock(bb);
     }
 
     /** Fills up the given region with the fluids texture, repeated. Ignores the value of {@link FluidStack#amount}. Use
      * {@link GuiUtil}'s fluid drawing methods in preference to this. */
-    public static void drawFluidForGui(FluidStack fluid, int startX, int startY, int endX, int endY) {
+    public static void drawFluidForGui(FluidStack fluid, double startX, double startY, double endX, double endY) {
 
         sprite = FluidRenderer.fluidSprites.get(FluidSpriteType.STILL).get(fluid.getFluid());
         if (sprite == null) {
@@ -275,60 +281,68 @@ public class FluidRenderer {
         RenderUtil.setGLColorFromInt(fluid.getFluid().getColor(fluid));
 
         Tessellator tess = Tessellator.getInstance();
-        vb = tess.getBuffer();
-        vb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        bb = tess.getBuffer();
+        bb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
 
         // draw all the full sprites
 
-        int diffX = endX - startX;
-        int diffY = endY - startY;
+        double diffX = endX - startX;
+        double diffY = endY - startY;
 
         int stepX = diffX > 0 ? 16 : -16;
         int stepY = diffY > 0 ? 16 : -16;
 
-        int loopEndX = startX + 16 * (diffX / 16);
-        int loopEndY = startY + 16 * (diffY / 16);
+        int loopCountX = (int) Math.abs(diffX / 16);
+        int loopCountY = (int) Math.abs(diffY / 16);
 
-        for (int x = startX; x != loopEndX; x += stepX) {
-            for (int y = startY; y != loopEndY; y += stepY) {
+        double x = startX;
+        for (int xc = 0; xc < loopCountX; xc++) {
+            double y = startY;
+            for (int yc = 0; yc < loopCountY; yc++) {
                 guiVertex(x, y, 0, 0);
                 guiVertex(x + stepX, y, 16, 0);
                 guiVertex(x + stepX, y + stepY, 16, 16);
                 guiVertex(x, y + stepY, 0, 16);
+                y += stepY;
             }
+            x += stepX;
         }
 
         if (diffX % 16 != 0) {
-            int additionalWidth = diffX % 16;
-            int x = endX - additionalWidth;
-            int xTex = additionalWidth < 0 ? -additionalWidth : additionalWidth;
-            for (int y = startY; y != loopEndY; y += stepY) {
+            double additionalWidth = diffX % 16;
+            x = endX - additionalWidth;
+            double xTex = Math.abs(additionalWidth);
+            double y = startY;
+            for (int yc = 0; yc < loopCountY; y++) {
                 guiVertex(x, y, 0, 0);
                 guiVertex(endX, y, xTex, 0);
                 guiVertex(endX, y + stepY, xTex, 16);
                 guiVertex(x, y + stepY, 0, 16);
+                y += stepY;
             }
         }
 
         if (diffY % 16 != 0) {
-            int additionalHeight = diffY % 16;
-            int y = endY - additionalHeight;
-            int yTex = additionalHeight < 0 ? -additionalHeight : additionalHeight;
-            for (int x = startX; x != loopEndX; x += stepX) {
+            double additionalHeight = diffY % 16;
+            double y = endY - additionalHeight;
+            double yTex = Math.abs(additionalHeight);
+            x = startX;
+            for (int xc = 0; xc < loopCountX; xc++) {
                 guiVertex(x, y, 0, 0);
                 guiVertex(x + stepX, y, 16, 0);
                 guiVertex(x + stepX, endY, 16, yTex);
                 guiVertex(x, endY, 0, yTex);
+                x += stepX;
             }
         }
 
         if (diffX % 16 != 0 && diffY % 16 != 0) {
-            int w = diffX % 16;
-            int h = diffY % 16;
-            int x = endX - w;
-            int y = endY - h;
-            int tx = w < 0 ? -w : w;
-            int ty = h < 0 ? -h : h;
+            double w = diffX % 16;
+            double h = diffY % 16;
+            x = endX - w;
+            double y = endY - h;
+            double tx = w < 0 ? -w : w;
+            double ty = h < 0 ? -h : h;
             guiVertex(x, y, 0, 0);
             guiVertex(endX, y, tx, 0);
             guiVertex(endX, endY, tx, ty);
@@ -338,15 +352,15 @@ public class FluidRenderer {
         tess.draw();
         GlStateManager.color(1, 1, 1);
         sprite = null;
-        vb = null;
+        bb = null;
     }
 
-    private static void guiVertex(int x, int y, int u, int v) {
+    private static void guiVertex(double x, double y, double u, double v) {
         float ru = sprite.getInterpolatedU(u);
         float rv = sprite.getInterpolatedV(v);
-        vb.pos(x, y, 0);
-        vb.tex(ru, rv);
-        vb.endVertex();
+        bb.pos(x, y, 0);
+        bb.tex(ru, rv);
+        bb.endVertex();
     }
 
     /** Used to keep track of what position maps to what texture co-ord.
@@ -367,9 +381,8 @@ public class FluidRenderer {
             this.vy = vy;
         }
 
-        /** Changes the vertex's texture co-ord to be the same as the position, for that face.
-         * 
-         * (Uses {@link #ux} and {@link #vy} to determine how they are mapped). */
+        /** Changes the vertex's texture co-ord to be the same as the position, for that face. (Uses {@link #ux} and
+         * {@link #vy} to determine how they are mapped). */
         private void apply(double x, double y, double z) {
             double realu = ux ? x : z;
             double realv = vy ? y : z;
@@ -405,7 +418,7 @@ public class FluidRenderer {
         }
 
         public TankSize shink(Vec3d by) {
-            return shrink(by.xCoord, by.yCoord, by.zCoord);
+            return shrink(by.x, by.y, by.z);
         }
 
         public TankSize rotateY() {
@@ -416,9 +429,9 @@ public class FluidRenderer {
 
         private static Vec3d rotateY(Vec3d vec) {
             return new Vec3d(//
-                1 - vec.zCoord,//
-                vec.yCoord,//
-                vec.xCoord//
+                1 - vec.z,//
+                vec.y,//
+                vec.x//
             );
         }
     }

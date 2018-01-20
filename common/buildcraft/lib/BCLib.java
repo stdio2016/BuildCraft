@@ -8,14 +8,15 @@ import java.util.function.Consumer;
 
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.Instance;
+import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLMissingMappingsEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
-import net.minecraftforge.fml.relauncher.Side;
 
 import buildcraft.api.BCModules;
 import buildcraft.api.core.BCLog;
@@ -23,19 +24,16 @@ import buildcraft.api.core.BCLog;
 import buildcraft.lib.block.VanillaPaintHandlers;
 import buildcraft.lib.block.VanillaRotationHandlers;
 import buildcraft.lib.chunkload.ChunkLoaderManager;
+import buildcraft.lib.command.CommandBuildCraft;
 import buildcraft.lib.expression.ExpressionDebugManager;
-import buildcraft.lib.item.ItemManager;
+import buildcraft.lib.expression.minecraft.ExpressionCompat;
+import buildcraft.lib.fluid.FluidManager;
 import buildcraft.lib.list.VanillaListHandlers;
 import buildcraft.lib.marker.MarkerCache;
-import buildcraft.lib.net.MessageContainer;
 import buildcraft.lib.net.MessageManager;
-import buildcraft.lib.net.MessageMarker;
-import buildcraft.lib.net.MessageUpdateTile;
 import buildcraft.lib.net.cache.BuildCraftObjectCaches;
-import buildcraft.lib.net.cache.MessageObjectCacheReply;
-import buildcraft.lib.net.cache.MessageObjectCacheReq;
-import buildcraft.lib.particle.MessageParticleVanilla;
 import buildcraft.lib.registry.MigrationManager;
+import buildcraft.lib.registry.RegistrationHelper;
 import buildcraft.lib.registry.TagManager;
 import buildcraft.lib.registry.TagManager.EnumTagType;
 import buildcraft.lib.registry.TagManager.TagEntry;
@@ -45,6 +43,7 @@ import buildcraft.lib.registry.TagManager.TagEntry;
     modid = BCLib.MODID,
     name = "BuildCraft Lib",
     version = BCLib.VERSION,
+    updateJSON = "https://mod-buildcraft.com/version/versions.json",
     acceptedMinecraftVersions = "(gradle_replace_mcversion,)",
     dependencies = "required-after:forge@(gradle_replace_forgeversion,)"
 )
@@ -53,25 +52,50 @@ public class BCLib {
     public static final String MODID = "buildcraftlib";
     public static final String VERSION = "${version}";
     public static final String MC_VERSION = "${mcversion}";
-    public static final String GIT_COMMIT_HASH = "${git_commit_hash}";
     public static final String GIT_BRANCH = "${git_branch}";
+    public static final String GIT_COMMIT_HASH = "${git_commit_hash}";
+    public static final String GIT_COMMIT_MSG = "${git_commit_msg}";
+    public static final String GIT_COMMIT_AUTHOR = "${git_commit_author}";
 
     public static final boolean DEV = VERSION.startsWith("$") || Boolean.getBoolean("buildcraft.dev");
 
     @Instance(MODID)
     public static BCLib INSTANCE;
 
+    public static ModContainer MOD_CONTAINER;
+
     @Mod.EventHandler
     public static void preInit(FMLPreInitializationEvent evt) {
+        MOD_CONTAINER = Loader.instance().activeModContainer();
         BCLog.logger.info("");
         BCLog.logger.info("Starting BuildCraft " + BCLib.VERSION);
         BCLog.logger.info("Copyright (c) the BuildCraft team, 2011-2017");
-        BCLog.logger.info("http://www.mod-buildcraft.com");
+        BCLog.logger.info("https://www.mod-buildcraft.com");
+        if (!GIT_COMMIT_HASH.startsWith("${")) {
+            BCLog.logger.info("Detailed Build Information:");
+            BCLog.logger.info("  Branch " + GIT_BRANCH);
+            BCLog.logger.info("  Commit " + GIT_COMMIT_HASH);
+            BCLog.logger.info("    " + GIT_COMMIT_MSG);
+            BCLog.logger.info("    committed by " + GIT_COMMIT_AUTHOR);
+        }
+        BCLog.logger.info("");
+        BCLog.logger.info("Loaded Modules:");
+        for (BCModules module : BCModules.VALUES) {
+            if (module.isLoaded()) {
+                BCLog.logger.info("  - " + module.lowerCaseName);
+            }
+        }
+        BCLog.logger.info("Missing Modules:");
+        for (BCModules module : BCModules.VALUES) {
+            if (!module.isLoaded()) {
+                BCLog.logger.info("  - " + module.lowerCaseName);
+            }
+        }
         BCLog.logger.info("");
 
         ExpressionDebugManager.logger = BCLog.logger::info;
+        ExpressionCompat.setup();
 
-        BCModules.fmlPreInit();
         BCLibRegistries.fmlPreInit();
         BCLibProxy.getProxy().fmlPreInit();
         BCLibItems.fmlPreInit();
@@ -79,14 +103,9 @@ public class BCLib {
         BuildCraftObjectCaches.fmlPreInit();
         NetworkRegistry.INSTANCE.registerGuiHandler(INSTANCE, BCLibProxy.getProxy());
 
-        MessageManager.addMessageType(MessageUpdateTile.class, MessageUpdateTile.HANDLER, Side.CLIENT, Side.SERVER);
-        MessageManager.addMessageType(MessageContainer.class, MessageContainer.HANDLER, Side.CLIENT, Side.SERVER);
-        MessageManager.addMessageType(MessageMarker.class, MessageMarker.HANDLER, Side.CLIENT);
-        MessageManager.addMessageType(MessageParticleVanilla.class, MessageParticleVanilla.HANDLER, Side.CLIENT);
-        MessageManager.addMessageType(MessageObjectCacheReq.class, MessageObjectCacheReq.HANDLER, Side.SERVER);
-        MessageManager.addMessageType(MessageObjectCacheReply.class, MessageObjectCacheReply.HANDLER, Side.CLIENT);
-
         MinecraftForge.EVENT_BUS.register(BCLibEventDist.class);
+        MinecraftForge.EVENT_BUS.register(MigrationManager.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(FluidManager.class);
 
         ForgeChunkManager.setForcedChunkLoadingCallback(BCLib.INSTANCE, ChunkLoaderManager::rebindTickets);
     }
@@ -100,29 +119,28 @@ public class BCLib {
         VanillaPaintHandlers.fmlInit();
         VanillaRotationHandlers.fmlInit();
 
-        ItemManager.fmlInit();
-
-        BCLibRecipes.fmlInit();
+        RegistrationHelper.registerOredictEntries();
     }
 
     @Mod.EventHandler
     public static void postInit(FMLPostInitializationEvent evt) {
         BCLibProxy.getProxy().fmlPostInit();
         BuildCraftObjectCaches.fmlPostInit();
-        MessageManager.fmlPostInit();
         VanillaListHandlers.fmlPostInit();
         MarkerCache.postInit();
+        MessageManager.fmlPostInit();
     }
 
     @Mod.EventHandler
-    public static void missingMappings(FMLMissingMappingsEvent evt) {
-        MigrationManager.INSTANCE.missingMappingEvent(evt);
+    public static void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new CommandBuildCraft());
     }
 
     static {
         startBatch();
-        registerTag("item.guide").reg("guide").locale("guide").model("guide").tab("vanilla.misc");
-        registerTag("item.guide.note").reg("guide_note").locale("guide_note").model("guide_note").tab("vanilla.misc");
+        registerTag("item.guide").reg("guide").locale("buildcraft.guide").model("guide").tab("vanilla.misc");
+        registerTag("item.guide.note").reg("guide_note").locale("buildcraft.guide_note").model("guide_note")
+            .tab("vanilla.misc");
         registerTag("item.debugger").reg("debugger").locale("debugger").model("debugger").tab("vanilla.misc");
         endBatch(TagManager.prependTags("buildcraftlib:", EnumTagType.REGISTRY_NAME, EnumTagType.MODEL_LOCATION));
     }

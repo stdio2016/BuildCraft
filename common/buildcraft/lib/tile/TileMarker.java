@@ -10,9 +10,6 @@ import java.util.List;
 
 import net.minecraft.util.EnumFacing;
 
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-
 import buildcraft.api.tiles.IDebuggable;
 
 import buildcraft.lib.marker.MarkerCache;
@@ -66,7 +63,6 @@ public abstract class TileMarker<C extends MarkerConnection<C>> extends TileBC_N
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
         C current = getCurrentConnection();
         MarkerSubCache<C> cache = getLocalCache();

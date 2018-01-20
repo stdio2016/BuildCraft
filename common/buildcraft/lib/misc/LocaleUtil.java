@@ -9,6 +9,7 @@ package buildcraft.lib.misc;
 import java.text.NumberFormat;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.IllegalFormatException;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -17,7 +18,6 @@ import net.minecraft.item.EnumDyeColor;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.text.translation.I18n;
 
-import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.IFluidTank;
 
 import buildcraft.api.core.BCDebugging;
@@ -40,6 +40,7 @@ public class LocaleUtil {
     private static String localeKeyMjStatic, localeKeyMjFlow;
 
     static {
+        BCLibConfig.configChangeListeners.add(LocaleUtil::onConfigChanged);
         onConfigChanged();
     }
 
@@ -88,7 +89,11 @@ public class LocaleUtil {
             }
             return key + " " + Arrays.toString(args);
         }
-        return String.format(localized, args);
+        try {
+            return String.format(localized, args);
+        } catch (IllegalFormatException ife) {
+            return "Bad Format: " + ife.getMessage();
+        }
     }
 
     /** Checks to see if the given key can be localized.
@@ -111,21 +116,17 @@ public class LocaleUtil {
         return localize("direction." + (face == null ? "center" : face.getName()));
     }
 
-    public static String localizeFluidStatic(IFluidTank tank) {
-        return localizeFluidStatic(tank.getFluid(), tank.getCapacity());
+    public static String localizeFluidStaticAmount(IFluidTank tank) {
+        return localizeFluidStaticAmount(tank.getFluidAmount(), tank.getCapacity());
     }
 
-    public static String localizeFluidStatic(FluidStack fluidStack) {
-        return localizeFluidStatic(fluidStack, -1);
+    public static String localizeFluidStaticAmount(int fluidAmount) {
+        return localizeFluidStaticAmount(fluidAmount, -1);
     }
 
-    /** Localizes the given fluid stack, out of a given capacity
-     * 
-     * @param fluidStack
-     * @param capacity
-     * @return */
-    public static String localizeFluidStatic(FluidStack fluidStack, int capacity) {
-        if (fluidStack == null || fluidStack.amount <= 0) {
+    /** Localizes the given fluid amount, out of a given capacity */
+    public static String localizeFluidStaticAmount(int fluidAmount, int capacity) {
+        if (fluidAmount <= 0) {
             if (capacity > 0) {
                 String cap;
                 if (BCLibConfig.useBucketsStatic) {
@@ -137,20 +138,19 @@ public class LocaleUtil {
             }
             return localize("buildcraft.fluid.empty");
         } else {
-            String fluid = fluidStack.getLocalizedName();
             String amount;
             String cap;
             if (BCLibConfig.useBucketsStatic) {
-                amount = FORMAT_FLUID.format(fluidStack.amount / 1000.0);
+                amount = FORMAT_FLUID.format(fluidAmount / 1000.0);
                 cap = FORMAT_FLUID.format(capacity / 1000.0);
             } else {
-                amount = FORMAT_FLUID.format(fluidStack.amount);
+                amount = FORMAT_FLUID.format(fluidAmount);
                 cap = FORMAT_FLUID.format(capacity);
             }
-            if (capacity == fluidStack.amount) {
-                return localize(localeKeyFluidStaticFull, amount, fluid);
+            if (capacity == fluidAmount) {
+                return localize(localeKeyFluidStaticFull, amount);
             }
-            return localize(capacity > 0 ? localeKeyFluidStaticCap : localeKeyFluidStatic, amount, fluid, cap);
+            return localize(capacity > 0 ? localeKeyFluidStaticCap : localeKeyFluidStatic, amount, cap);
         }
     }
 

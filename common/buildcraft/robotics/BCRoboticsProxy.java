@@ -17,10 +17,16 @@ import net.minecraftforge.fml.common.network.IGuiHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import buildcraft.api.BCModules;
+
+import buildcraft.lib.net.MessageManager;
+
 import buildcraft.robotics.client.render.RenderZonePlanner;
 import buildcraft.robotics.container.ContainerZonePlanner;
 import buildcraft.robotics.gui.GuiZonePlanner;
 import buildcraft.robotics.tile.TileZonePlanner;
+import buildcraft.robotics.zone.MessageZoneMapRequest;
+import buildcraft.robotics.zone.MessageZoneMapResponse;
 
 public abstract class BCRoboticsProxy implements IGuiHandler {
     @SidedProxy(modId = BCRobotics.MODID)
@@ -47,13 +53,23 @@ public abstract class BCRoboticsProxy implements IGuiHandler {
         return null;
     }
 
-    public void fmlInit() {}
-
-    @SideOnly(Side.SERVER)
-    public static class ServerProxy extends BCRoboticsProxy {
-
+    public void fmlPreInit() {
+        MessageManager.registerMessageClass(BCModules.ROBOTICS, MessageZoneMapRequest.class, MessageZoneMapRequest.HANDLER, Side.SERVER);
+        MessageManager.registerMessageClass(BCModules.ROBOTICS, MessageZoneMapResponse.class, Side.CLIENT);
     }
 
+    public void fmlInit() {
+    }
+
+    public void fmlPostInit() {
+    }
+
+    @SuppressWarnings("unused")
+    @SideOnly(Side.SERVER)
+    public static class ServerProxy extends BCRoboticsProxy {
+    }
+
+    @SuppressWarnings("unused")
     @SideOnly(Side.CLIENT)
     public static class ClientProxy extends BCRoboticsProxy {
         @Override
@@ -66,6 +82,12 @@ public abstract class BCRoboticsProxy implements IGuiHandler {
                 }
             }
             return null;
+        }
+
+        @Override
+        public void fmlPreInit() {
+            super.fmlPreInit();
+            MessageManager.setHandler(MessageZoneMapResponse.class, MessageZoneMapResponse.HANDLER, Side.CLIENT);
         }
 
         @Override

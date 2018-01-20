@@ -50,23 +50,24 @@ public class BlockFloodGate extends BlockBCTile_Neptune {
     }
 
     @Override
-    public TileEntity createNewTileEntity(World world, int meta) {
+    public TileBC_Neptune createTileEntity(World world, IBlockState state) {
         return new TileFloodGate();
     }
 
     @Override
     public IBlockState getActualState(IBlockState state, IBlockAccess world, BlockPos pos) {
-        TileEntity tile = BlockUtil.getTileEntityForGetActualState(world, pos);
+        TileEntity tile = world.getTileEntity(pos);
         if (tile instanceof TileFloodGate) {
             for (EnumFacing side : CONNECTED_MAP.keySet()) {
-                state = state.withProperty(CONNECTED_MAP.get(side), ((TileFloodGate) tile).openSides.get(side));
+                state = state.withProperty(CONNECTED_MAP.get(side), ((TileFloodGate) tile).openSides.contains(side));
             }
         }
         return state;
     }
 
     @Override
-    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY, float hitZ) {
+    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand,
+        EnumFacing side, float hitX, float hitY, float hitZ) {
         ItemStack heldItem = player.getHeldItem(hand);
         if (heldItem.getItem() instanceof IToolWrench) {
             if (!world.isRemote) {
@@ -74,9 +75,12 @@ public class BlockFloodGate extends BlockBCTile_Neptune {
                     TileEntity tile = world.getTileEntity(pos);
                     if (tile instanceof TileFloodGate) {
                         if (CONNECTED_MAP.containsKey(side)) {
-                            ((TileFloodGate) tile).openSides.put(side, !((TileFloodGate) tile).openSides.get(side));
-                            ((TileFloodGate) tile).queue.clear();
-                            ((TileFloodGate) tile).sendNetworkUpdate(TileBC_Neptune.NET_RENDER_DATA);
+                            TileFloodGate floodGate = (TileFloodGate) tile;
+                            if (!floodGate.openSides.remove(side)) {
+                                floodGate.openSides.add(side);
+                            }
+                            floodGate.queue.clear();
+                            floodGate.sendNetworkUpdate(TileBC_Neptune.NET_RENDER_DATA);
                             return true;
                         }
                     }

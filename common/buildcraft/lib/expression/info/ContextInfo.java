@@ -13,11 +13,11 @@ import buildcraft.lib.expression.FunctionContext;
 import buildcraft.lib.expression.info.VariableInfo.VariableInfoBoolean;
 import buildcraft.lib.expression.info.VariableInfo.VariableInfoDouble;
 import buildcraft.lib.expression.info.VariableInfo.VariableInfoLong;
-import buildcraft.lib.expression.info.VariableInfo.VariableInfoString;
+import buildcraft.lib.expression.info.VariableInfo.VariableInfoObject;
 import buildcraft.lib.expression.node.value.NodeVariableBoolean;
 import buildcraft.lib.expression.node.value.NodeVariableDouble;
 import buildcraft.lib.expression.node.value.NodeVariableLong;
-import buildcraft.lib.expression.node.value.NodeVariableString;
+import buildcraft.lib.expression.node.value.NodeVariableObject;
 
 public class ContextInfo {
     public final FunctionContext fnCtx;
@@ -27,23 +27,23 @@ public class ContextInfo {
         this.fnCtx = fnCtx;
     }
 
-    public VariableInfoString createInfoString(String name, NodeVariableString node) {
-        VariableInfoString info = new VariableInfoString(node);
-        variables.put(name, info);
+    public <T> VariableInfoObject<T> createInfoObject(NodeVariableObject<T> node) {
+        VariableInfoObject<T> info = new VariableInfoObject<>(node);
+        variables.put(node.name, info);
         return info;
     }
 
-    public VariableInfoString getInfoString(String name) {
+    public VariableInfoObject<?> getInfoObject(String name) {
         VariableInfo<?> info = variables.get(name);
-        if (info instanceof VariableInfoString) {
-            return (VariableInfoString) info;
+        if (info instanceof VariableInfoObject) {
+            return (VariableInfoObject<?>) info;
         }
         return null;
     }
 
-    public VariableInfoDouble createInfoDouble(String name, NodeVariableDouble node) {
+    public VariableInfoDouble createInfoDouble(NodeVariableDouble node) {
         VariableInfoDouble info = new VariableInfoDouble(node);
-        variables.put(name, info);
+        variables.put(node.name, info);
         return info;
     }
 
@@ -55,9 +55,9 @@ public class ContextInfo {
         return null;
     }
 
-    public VariableInfoLong createInfoLong(String name, NodeVariableLong node) {
+    public VariableInfoLong createInfoLong(NodeVariableLong node) {
         VariableInfoLong info = new VariableInfoLong(node);
-        variables.put(name, info);
+        variables.put(node.name, info);
         return info;
     }
 
@@ -69,9 +69,9 @@ public class ContextInfo {
         return null;
     }
 
-    public VariableInfoBoolean createInfoBoolean(String name, NodeVariableBoolean node) {
+    public VariableInfoBoolean createInfoBoolean(NodeVariableBoolean node) {
         VariableInfoBoolean info = new VariableInfoBoolean(node);
-        variables.put(name, info);
+        variables.put(node.name, info);
         return info;
     }
 

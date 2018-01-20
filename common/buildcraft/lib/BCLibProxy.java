@@ -6,14 +6,12 @@
  */
 package buildcraft.lib;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.resources.IReloadableResourceManager;
-import net.minecraft.client.resources.IResource;
 import net.minecraft.client.resources.IResourceManager;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
@@ -28,7 +26,8 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import buildcraft.lib.block.BlockBCBase_Neptune;
+import buildcraft.api.BCModules;
+
 import buildcraft.lib.client.guide.GuiGuide;
 import buildcraft.lib.client.guide.GuideManager;
 import buildcraft.lib.client.reload.LibConfigChangeListener;
@@ -36,10 +35,15 @@ import buildcraft.lib.client.render.DetachedRenderer;
 import buildcraft.lib.client.render.DetachedRenderer.RenderMatrixType;
 import buildcraft.lib.client.render.MarkerRenderer;
 import buildcraft.lib.debug.DebugRenderHelper;
-import buildcraft.lib.fluid.BCFluid;
-import buildcraft.lib.fluid.FluidManager;
-import buildcraft.lib.item.IItemBuildCraft;
-import buildcraft.lib.item.ItemManager;
+import buildcraft.lib.gui.config.GuiConfigManager;
+import buildcraft.lib.net.MessageContainer;
+import buildcraft.lib.net.MessageDebugRequest;
+import buildcraft.lib.net.MessageDebugResponse;
+import buildcraft.lib.net.MessageManager;
+import buildcraft.lib.net.MessageMarker;
+import buildcraft.lib.net.MessageUpdateTile;
+import buildcraft.lib.net.cache.MessageObjectCacheRequest;
+import buildcraft.lib.net.cache.MessageObjectCacheResponse;
 
 public abstract class BCLibProxy implements IGuiHandler {
     @SidedProxy(modId = BCLib.MODID)
@@ -49,17 +53,21 @@ public abstract class BCLibProxy implements IGuiHandler {
         return proxy;
     }
 
-    public void postRegisterItem(IItemBuildCraft item) {}
+    void fmlPreInit() {
+        MessageManager.registerMessageClass(BCModules.LIB, MessageUpdateTile.class, MessageUpdateTile.HANDLER);
+        MessageManager.registerMessageClass(BCModules.LIB, MessageContainer.class, MessageContainer.HANDLER);
+        MessageManager.registerMessageClass(BCModules.LIB, MessageMarker.class, Side.CLIENT);
+        MessageManager.registerMessageClass(BCModules.LIB, MessageObjectCacheRequest.class, MessageObjectCacheRequest.HANDLER, Side.SERVER);
+        MessageManager.registerMessageClass(BCModules.LIB, MessageObjectCacheResponse.class, Side.CLIENT);
+        MessageManager.registerMessageClass(BCModules.LIB, MessageDebugRequest.class,MessageDebugRequest.HANDLER, Side.SERVER);
+        MessageManager.registerMessageClass(BCModules.LIB, MessageDebugResponse.class, Side.CLIENT);
+    }
 
-    public void postRegisterBlock(BlockBCBase_Neptune block) {}
+    void fmlInit() {
+    }
 
-    public void postRegisterFluid(BCFluid fluid) {}
-
-    void fmlPreInit() {}
-
-    void fmlInit() {}
-
-    void fmlPostInit() {}
+    void fmlPostInit() {
+    }
 
     public World getClientWorld() {
         return null;
@@ -98,18 +106,14 @@ public abstract class BCLibProxy implements IGuiHandler {
         return null;
     }
 
+    @SuppressWarnings("unused")
+    @SideOnly(Side.SERVER)
+    public static class ServerProxy extends BCLibProxy {
+    }
+
+    @SuppressWarnings("unused")
     @SideOnly(Side.CLIENT)
     public static class ClientProxy extends BCLibProxy {
-        @Override
-        public void postRegisterItem(IItemBuildCraft item) {
-            item.postRegisterClient();
-        }
-
-        @Override
-        public void postRegisterFluid(BCFluid fluid) {
-            FluidManager.postRegisterFluid(fluid);
-        }
-
         @Override
         void fmlPreInit() {
             super.fmlPreInit();
@@ -118,20 +122,24 @@ public abstract class BCLibProxy implements IGuiHandler {
             // various sprite registers
             BCLibSprites.fmlPreInitClient();
             BCLibConfig.configChangeListeners.add(LibConfigChangeListener.INSTANCE);
+
+            MessageManager.setHandler(MessageMarker.class, MessageMarker.HANDLER, Side.CLIENT);
+            MessageManager.setHandler(MessageObjectCacheResponse.class, MessageObjectCacheResponse.HANDLER, Side.CLIENT);
+            MessageManager.setHandler(MessageDebugResponse.class, MessageDebugResponse.HANDLER, Side.CLIENT);
         }
 
         @Override
         void fmlInit() {
             super.fmlInit();
-            IResourceManager manager = Minecraft.getMinecraft().getResourceManager();
-            IReloadableResourceManager reloadable = (IReloadableResourceManager) manager;
-            reloadable.registerReloadListener(GuideManager.INSTANCE);
-            ItemManager.fmlInitClient();
         }
 
         @Override
         void fmlPostInit() {
             super.fmlPostInit();
+            IResourceManager manager = Minecraft.getMinecraft().getResourceManager();
+            IReloadableResourceManager reloadable = (IReloadableResourceManager) manager;
+            reloadable.registerReloadListener(GuideManager.INSTANCE);
+            GuiConfigManager.loadFromConfigFile();
         }
 
         @Override
@@ -194,14 +202,7 @@ public abstract class BCLibProxy implements IGuiHandler {
 
         @Override
         public InputStream getStreamForIdentifier(ResourceLocation identifier) throws IOException {
-            IResource resource = Minecraft.getMinecraft().getResourceManager().getResource(identifier);
-            if (resource == null) {
-                throw new FileNotFoundException(identifier.toString());
-            }
-            return resource.getInputStream();
+            return Minecraft.getMinecraft().getResourceManager().getResource(identifier).getInputStream();
         }
     }
-
-    @SideOnly(Side.SERVER)
-    public static class ServerProxy extends BCLibProxy {}
 }

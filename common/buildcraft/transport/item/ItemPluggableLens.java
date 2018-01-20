@@ -10,12 +10,12 @@ import javax.annotation.Nonnull;
 
 import gnu.trove.map.hash.TIntObjectHashMap;
 
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.EnumDyeColor;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
@@ -31,6 +31,7 @@ import buildcraft.api.transport.pipe.IPipeHolder;
 import buildcraft.api.transport.pluggable.PipePluggable;
 import buildcraft.api.transport.pluggable.PluggableDefinition;
 
+import buildcraft.lib.client.render.font.SpecialColourFontRenderer;
 import buildcraft.lib.item.ItemBC_Neptune;
 import buildcraft.lib.misc.ColourUtil;
 import buildcraft.lib.misc.LocaleUtil;
@@ -77,16 +78,21 @@ public class ItemPluggableLens extends ItemBC_Neptune implements IItemPluggable 
     @Override
     public String getItemStackDisplayName(ItemStack stack) {
         LensData data = getData(stack);
-        String colour = data.colour == null ? LocaleUtil.localize("color.clear") : ColourUtil.getTextFullTooltip(data.colour);
+        String colour = data.colour == null ? LocaleUtil.localize("color.clear") : ColourUtil.getTextFullTooltipSpecial(data.colour);
         String first = LocaleUtil.localize(data.isFilter ? "item.Filter.name" : "item.Lens.name");
         return colour + " " + first;
     }
 
     @Override
     @SideOnly(Side.CLIENT)
-    public void getSubItems(Item item, CreativeTabs tab, NonNullList<ItemStack> subItems) {
+    public FontRenderer getFontRenderer(ItemStack stack) {
+        return SpecialColourFontRenderer.INSTANCE;
+    }
+
+    @Override
+    protected void addSubItems(CreativeTabs tab, NonNullList<ItemStack> subItems) {
         for (int i = 0; i < 34; i++) {
-            subItems.add(new ItemStack(item, 1, i));
+            subItems.add(new ItemStack(this, 1, i));
         }
     }
 

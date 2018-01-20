@@ -31,18 +31,19 @@ import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.Explosion;
+import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
-import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.items.IItemHandlerModifiable;
@@ -60,19 +61,18 @@ import buildcraft.lib.delta.DeltaManager.EnumDeltaMessage;
 import buildcraft.lib.fluid.TankManager;
 import buildcraft.lib.migrate.BCVersion;
 import buildcraft.lib.misc.BlockUtil;
+import buildcraft.lib.misc.FakePlayerProvider;
 import buildcraft.lib.misc.InventoryUtil;
 import buildcraft.lib.misc.MessageUtil;
 import buildcraft.lib.misc.PermissionUtil;
 import buildcraft.lib.misc.PermissionUtil.PermissionBlock;
+import buildcraft.lib.misc.StringUtilBC;
 import buildcraft.lib.misc.data.IdAllocator;
 import buildcraft.lib.net.IPayloadReceiver;
 import buildcraft.lib.net.IPayloadWriter;
 import buildcraft.lib.net.MessageManager;
 import buildcraft.lib.net.MessageUpdateTile;
 import buildcraft.lib.net.PacketBufferBC;
-import buildcraft.lib.registry.TagManager;
-import buildcraft.lib.registry.TagManager.EnumTagType;
-import buildcraft.lib.registry.TagManager.EnumTagTypeMulti;
 import buildcraft.lib.tile.item.ItemHandlerManager;
 
 public abstract class TileBC_Neptune extends TileEntity implements IPayloadReceiver, IAdvDebugTarget, IPlayerOwned {
@@ -106,7 +106,7 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
     public static final int NET_REDRAW = IDS.allocId("REDRAW");
 
     protected final CapabilityHelper caps = new CapabilityHelper();
-    protected final ItemHandlerManager itemManager = caps.addProvider(new ItemHandlerManager(this::onSlotChange));
+    protected final ItemHandlerManager itemManager = new ItemHandlerManager(this::onSlotChange);
     protected final TankManager tankManager = new TankManager();
 
     /** Handles all of the players that are currently using this tile (have a GUI open) */
@@ -131,12 +131,6 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
 
     public TileBC_Neptune() {
         caps.addProvider(itemManager);
-    }
-
-    public static <T extends TileEntity> void registerTile(Class<T> tileClass, String id) {
-        String regName = TagManager.getTag(id, EnumTagType.REGISTRY_NAME);
-        String[] alternatives = TagManager.getMultiTag(id, EnumTagTypeMulti.OLD_REGISTRY_NAME);
-        GameRegistry.registerTileEntityWithAlternatives(tileClass, regName, alternatives);
     }
 
     // ##################################################
@@ -228,10 +222,11 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
         InventoryUtil.dropAll(world, pos, toDrop);
     }
 
-    /** Called whenever {@link Block#getDrops(net.minecraft.world.IBlockAccess, BlockPos, IBlockState, int)}, or
+    /** Called whenever {@link Block#getDrops(NonNullList, IBlockAccess, BlockPos, IBlockState, int)}, or
      * {@link #onRemove()} is called (by default). */
     public void addDrops(NonNullList<ItemStack> toDrop, int fortune) {
         itemManager.addDrops(toDrop);
+        tankManager.addDrops(toDrop);
     }
 
     public void onPlacedBy(EntityLivingBase placer, ItemStack stack) {
@@ -242,6 +237,8 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
                 if (!owner.isComplete()) {
                     throw new IllegalArgumentException("Incomplete owner! ( " + placer + " -> " + owner + " )");
                 }
+            } else {
+                throw new IllegalArgumentException("Not an EntityPlayer! (placer = " + placer + ")");
             }
         }
     }
@@ -250,7 +247,7 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
         if (owner == null) {
             owner = player.getGameProfile();
             if (!owner.isComplete()) {
-                owner = null;
+                throw new IllegalArgumentException("Incomplete owner! ( " + player + " -> " + owner + " )");
             }
         }
         sendNetworkUpdate(NET_GUI_DATA, player);
@@ -261,6 +258,15 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
         usingPlayers.remove(player);
     }
 
+    public boolean onActivated(EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY,
+        float hitZ) {
+        return tankManager.onActivated(player, getPos(), hand);
+    }
+
+    public void onNeighbourBlockChanged(Block block, BlockPos nehighbour) {
+
+    }
+
     @Override
     public final boolean hasCapability(@Nonnull Capability<?> capability, EnumFacing facing) {
         return getCapability(capability, facing) != null;
@@ -268,7 +274,11 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
 
     @Override
     public <T> T getCapability(@Nonnull Capability<T> capability, EnumFacing facing) {
-        return caps.getCapability(capability, facing);
+        T obj = caps.getCapability(capability, facing);
+        if (obj == null) {
+            obj = super.getCapability(capability, facing);
+        }
+        return obj;
     }
 
     // Item caps
@@ -287,6 +297,11 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
 
     @Override
     public GameProfile getOwner() {
+        if (owner == null) {
+            String msg = "[lib.tile] Unknown owner for " + getClass() + " at ";
+            BCLog.logger.warn(msg + StringUtilBC.blockPosToString(getPos()));
+            return FakePlayerProvider.NULL_PROFILE;
+        }
         return owner;
     }
 
@@ -343,7 +358,11 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
     public final void sendNetworkUpdate(int id) {
         if (hasWorld()) {
             MessageUpdateTile message = createNetworkUpdate(id);
-            MessageUtil.sendToAllWatching(world, pos, message);
+            if (world.isRemote) {
+                MessageManager.sendToServer(message);
+            } else {
+                MessageUtil.sendToAllWatching(world, pos, message);
+            }
         }
     }
 
@@ -385,14 +404,35 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
     public final void createAndSendMessage(int id, IPayloadWriter writer) {
         if (hasWorld()) {
             IMessage message = createMessage(id, writer);
-            MessageUtil.sendToAllWatching(world, pos, message);
+            if (world.isRemote) {
+                MessageManager.sendToServer(message);
+            } else {
+                MessageUtil.sendToAllWatching(world, pos, message);
+            }
         }
     }
 
     public final void createAndSendGuiMessage(int id, IPayloadWriter writer) {
         if (hasWorld()) {
             IMessage message = createMessage(id, writer);
-            MessageUtil.sendToPlayers(usingPlayers, message);
+            if (world.isRemote) {
+                MessageManager.sendToServer(message);
+            } else {
+                MessageUtil.sendToPlayers(usingPlayers, message);
+            }
+        }
+    }
+
+    public final void createAndSendMessage(int id, EntityPlayerMP player, IPayloadWriter writer) {
+        if (hasWorld()) {
+            IMessage message = createMessage(id, writer);
+            MessageManager.sendTo(message, player);
+        }
+    }
+
+    public final void createAndSendGuiMessage(int id, EntityPlayerMP player, IPayloadWriter writer) {
+        if (usingPlayers.contains(player)) {
+            createAndSendMessage(id, player, writer);
         }
     }
 
@@ -434,9 +474,10 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
 
         try {
             int id = buf.readUnsignedShort();
-            readPayload(id, new PacketBufferBC(buf), world.isRemote ? Side.CLIENT : Side.SERVER, null);
+            PacketBufferBC buffer = new PacketBufferBC(buf);
+            readPayload(id, buffer, world.isRemote ? Side.CLIENT : Side.SERVER, null);
             // Make sure that we actually read the entire message rather than just discarding it
-            MessageUtil.ensureEmpty(buf, world.isRemote, getClass() + ", id = " + getIdAllocator().getNameFor(id));
+            MessageUtil.ensureEmpty(buffer, world.isRemote, getClass() + ", id = " + getIdAllocator().getNameFor(id));
             spawnReceiveParticles(id);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -512,9 +553,12 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
         if (side == Side.CLIENT) {
             if (id == NET_RENDER_DATA) deltaManager.receiveDeltaData(false, EnumDeltaMessage.CURRENT_STATE, buffer);
             else if (id == NET_GUI_DATA) deltaManager.receiveDeltaData(true, EnumDeltaMessage.CURRENT_STATE, buffer);
-            else if (id == NET_REN_DELTA_SINGLE) deltaManager.receiveDeltaData(false, EnumDeltaMessage.ADD_SINGLE, buffer);
-            else if (id == NET_GUI_DELTA_SINGLE) deltaManager.receiveDeltaData(true, EnumDeltaMessage.ADD_SINGLE, buffer);
-            else if (id == NET_REN_DELTA_CLEAR) deltaManager.receiveDeltaData(false, EnumDeltaMessage.SET_VALUE, buffer);
+            else if (id == NET_REN_DELTA_SINGLE)
+                deltaManager.receiveDeltaData(false, EnumDeltaMessage.ADD_SINGLE, buffer);
+            else if (id == NET_GUI_DELTA_SINGLE)
+                deltaManager.receiveDeltaData(true, EnumDeltaMessage.ADD_SINGLE, buffer);
+            else if (id == NET_REN_DELTA_CLEAR)
+                deltaManager.receiveDeltaData(false, EnumDeltaMessage.SET_VALUE, buffer);
             else if (id == NET_GUI_DELTA_CLEAR) deltaManager.receiveDeltaData(true, EnumDeltaMessage.SET_VALUE, buffer);
             else if (id == NET_REDRAW) redrawBlock();
             else if (id == NET_ADV_DEBUG) {
@@ -536,9 +580,13 @@ public abstract class TileBC_Neptune extends TileEntity implements IPayloadRecei
         deltaManager.readFromNBT(nbt.getCompoundTag("deltas"));
         if (nbt.hasKey("owner")) {
             owner = NBTUtil.readGameProfileFromNBT(nbt.getCompoundTag("owner"));
-            if (owner != null && !owner.isComplete()) {
-                owner = null;
+            if (owner == null || !owner.isComplete()) {
+                String msg = "[lib.tile] Unknown owner (" + owner + ") for " + getClass() + " at ";
+                BCLog.logger.warn(msg + getPos() + " when reading from NBT");
             }
+        } else {
+            String msg = "[lib.tile] Unknown owner (null) for " + getClass() + " at ";
+            BCLog.logger.warn(msg + getPos() + " when reading from NBT");
         }
         if (nbt.hasKey("items", Constants.NBT.TAG_COMPOUND)) {
             itemManager.deserializeNBT(nbt.getCompoundTag("items"));

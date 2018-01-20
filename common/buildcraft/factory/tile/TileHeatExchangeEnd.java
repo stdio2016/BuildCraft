@@ -12,6 +12,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
@@ -37,6 +38,7 @@ import buildcraft.lib.tile.TileBC_Neptune;
 
 import buildcraft.factory.BCFactoryBlocks;
 
+@Deprecated
 public class TileHeatExchangeEnd extends TileBC_Neptune implements IDebuggable, ITickable {
     public static final IdAllocator IDS = TileBC_Neptune.IDS.makeChild("HeatExchangeEnd");
     public static final int NET_TANK_HEATABLE_OUT = IDS.allocId("TANK_HEATABLE_OUT");
@@ -48,8 +50,8 @@ public class TileHeatExchangeEnd extends TileBC_Neptune implements IDebuggable, 
     }
 
     // Package-private to allow TileHeatExchangeStart to access them
-    final Tank tankHeatableOut = new Tank("heatable_out", 2 * Fluid.BUCKET_VOLUME, this);
-    final Tank tankCoolableIn = new Tank("coolable_in", 2 * Fluid.BUCKET_VOLUME, this, this::isCoolant);
+    final Tank tankHeatableOut = new Tank("heatableOut", 2 * Fluid.BUCKET_VOLUME, this);
+    final Tank tankCoolableIn = new Tank("coolableIn", 2 * Fluid.BUCKET_VOLUME, this, this::isCoolant);
 
     public final FluidSmoother smoothedHeatableOut;
     public final FluidSmoother smoothedCoolableIn;
@@ -73,7 +75,7 @@ public class TileHeatExchangeEnd extends TileBC_Neptune implements IDebuggable, 
     }
 
     private IFluidHandler getTankForSide(EnumFacing side) {
-        IBlockState state = getCurrentStateForBlock(BCFactoryBlocks.heatExchangeEnd);
+        IBlockState state = getCurrentStateForBlock(BCFactoryBlocks.heatExchange);
         if (state == null) {
             return null;
         }
@@ -82,6 +84,19 @@ public class TileHeatExchangeEnd extends TileBC_Neptune implements IDebuggable, 
             return null;
         }
         return tankCoolableIn;
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound nbt) {
+        // TODO: remove in next version
+        NBTTagCompound tanksTag = nbt.getCompoundTag("tanks");
+        if (tanksTag.hasKey("heatable_out")) {
+            tanksTag.setTag("heatableOut", tanksTag.getTag("heatable_out"));
+        }
+        if (tanksTag.hasKey("coolable_in")) {
+            tanksTag.setTag("coolableIn", tanksTag.getTag("coolable_in"));
+        }
+        super.readFromNBT(nbt);
     }
 
     @Override
@@ -123,18 +138,19 @@ public class TileHeatExchangeEnd extends TileBC_Neptune implements IDebuggable, 
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
-        if (hasWorld() && world.isRemote) {
-            left.add("coolable:");
-            smoothedCoolableIn.getDebugInfo(left, right, side);
-            left.add("");
-            left.add("heatable:");
-            smoothedHeatableOut.getDebugInfo(left, right, side);
-        } else {
-            left.add("heatable_out = " + tankHeatableOut.getDebugString());
-            left.add("coolable_in = " + tankCoolableIn.getDebugString());
-        }
+        left.add("heatable_out = " + tankHeatableOut.getDebugString());
+        left.add("coolable_in = " + tankCoolableIn.getDebugString());
+    }
+
+    @SideOnly(Side.CLIENT)
+    @Override
+    public void getClientDebugInfo(List<String> left, List<String> right, EnumFacing side) {
+        left.add("");
+        left.add("heatable_out:");
+        smoothedCoolableIn.getDebugInfo(left, right, side);
+        left.add("coolable_in:");
+        smoothedHeatableOut.getDebugInfo(left, right, side);
     }
 
     @Nullable

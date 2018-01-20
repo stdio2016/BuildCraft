@@ -37,7 +37,7 @@ public class FacadePhasedState implements IFacadePhasedState {
                     stateInfo = FacadeStateManager.defaultState;
                 }
             } catch (Throwable t) {
-                t.printStackTrace();
+                throw new RuntimeException("Failed badly when reading a facade state!", t);
             }
         }
         boolean isHollow = nbt.getBoolean("isHollow");
@@ -47,7 +47,14 @@ public class FacadePhasedState implements IFacadePhasedState {
 
     public NBTTagCompound writeToNbt() {
         NBTTagCompound nbt = new NBTTagCompound();
-        nbt.setTag("state", NBTUtil.writeBlockState(new NBTTagCompound(), stateInfo.state));
+        try {
+            nbt.setTag("state", NBTUtil.writeBlockState(new NBTTagCompound(), stateInfo.state));
+        } catch (Throwable t) {
+            throw new IllegalStateException("Writing facade block state"//
+                + "\n\tState = " + stateInfo//
+                + "\n\tBlock = " + stateInfo.state.getBlock()
+                + "\n\tBlock Class = " + stateInfo.state.getBlock().getClass(), t);
+        }
         nbt.setBoolean("isHollow", isHollow);
         if (activeColour != null) {
             nbt.setTag("activeColour", NBTUtilBC.writeEnum(activeColour));
@@ -67,7 +74,11 @@ public class FacadePhasedState implements IFacadePhasedState {
     }
 
     public void writeToBuffer(PacketBufferBC buf) {
-        MessageUtil.writeBlockState(buf, stateInfo.state);
+        try {
+            MessageUtil.writeBlockState(buf, stateInfo.state);
+        } catch (Throwable t) {
+            throw new IllegalStateException("Writing facade block state\n\tState = " + stateInfo.state, t);
+        }
         buf.writeBoolean(isHollow);
         MessageUtil.writeEnumOrNull(buf, activeColour);
     }
@@ -82,6 +93,11 @@ public class FacadePhasedState implements IFacadePhasedState {
 
     public boolean isSideSolid(EnumFacing side) {
         return stateInfo.isSideSolid[side.ordinal()];
+    }
+
+    @Override
+    public String toString() {
+        return (activeColour == null ? "" : activeColour + " ") + (isHollow ? "hollow " : "") + getState();
     }
 
     // IFacadePhasedState

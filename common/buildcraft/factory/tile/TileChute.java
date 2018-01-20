@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.tuple.Pair;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -72,7 +73,7 @@ public class TileChute extends TileBC_Neptune implements ITickable, IDebuggable 
     private void pickupItems(EnumFacing currentSide) {
         world.getEntitiesWithinAABB(
             EntityItem.class,
-            new AxisAlignedBB(pos.offset(currentSide, PICKUP_RADIUS)).expandXyz(PICKUP_RADIUS)
+            new AxisAlignedBB(pos.offset(currentSide, PICKUP_RADIUS)).grow(PICKUP_RADIUS)
         ).stream()
             .limit(PICKUP_MAX)
             .map(TransactorEntityItem::new)
@@ -111,6 +112,7 @@ public class TileChute extends TileBC_Neptune implements ITickable, IDebuggable 
             sides.stream()
                 .flatMap(side ->
                     world.getEntitiesWithinAABB(Entity.class, new AxisAlignedBB(pos.offset(side))).stream()
+                        .filter(entity -> !(entity instanceof EntityLivingBase))
                         .map(entity -> Pair.of(side, entity))
                 )
         )

@@ -8,6 +8,7 @@ package buildcraft.lib.client.sprite;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Function;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.PngSizeInfo;
@@ -37,10 +38,12 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
     @Override
     public void updateAnimation() {
         if (current == null) {
+            copyFrom(Minecraft.getMinecraft().getTextureMapBlocks().getMissingSprite());
             return;
         }
         Profiler p = Minecraft.getMinecraft().mcProfiler;
-        p.startSection(getClass());
+        // MAPPING: func_194340_a: Profiler.startSection
+        p.func_194340_a(getClass()::getSimpleName);
         if (needsSwapping) {
             p.startSection("copy");
             current.copyFrom(this);
@@ -48,11 +51,14 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
         }
         if (current.hasAnimationMetadata()) {
             p.startSection("update");
+            p.startSection(getIconName());
             current.updateAnimation();
+            p.endSection();
             p.endSection();
         } else if (needsSwapping) {
             p.startSection("swap");
-            TextureUtil.uploadTextureMipmap(current.getFrameTextureData(0), current.getIconWidth(), current.getIconHeight(), current.getOriginX(), current.getOriginY(), false, false);
+            TextureUtil.uploadTextureMipmap(current.getFrameTextureData(0), current.getIconWidth(),
+                current.getIconHeight(), current.getOriginX(), current.getOriginY(), false, false);
             p.endSection();
         }
         needsSwapping = false;
@@ -73,14 +79,11 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
         return false;
     }
 
-    public void reload(ResourceLocation from) {
-        load(Minecraft.getMinecraft().getResourceManager(), from);
-    }
-
     /** Actually loads the given location. Note that subclasses should override this, and possibly call
      * {@link #loadSprite(IResourceManager, String, ResourceLocation, boolean)} to load all of the possible variants. */
     @Override
-    public boolean load(IResourceManager manager, ResourceLocation location) {
+    public boolean load(IResourceManager manager, ResourceLocation location,
+        Function<ResourceLocation, TextureAtlasSprite> textureGetter) {
         TextureAtlasSprite sprite = loadSprite(manager, super.getIconName(), location, true);
         if (sprite != null) {
             swapWith(sprite);
@@ -92,7 +95,8 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
         return loadSprite(Minecraft.getMinecraft().getResourceManager(), name, location, careIfMissing);
     }
 
-    public static AtlasSpriteDirect loadSprite(IResourceManager manager, String name, ResourceLocation location, boolean careIfMissing) {
+    public static AtlasSpriteDirect loadSprite(IResourceManager manager, String name, ResourceLocation location,
+        boolean careIfMissing) {
         // Load the initial variant
         AtlasSpriteDirect sprite = new AtlasSpriteDirect(name);
         try {
@@ -156,5 +160,10 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
     @Override
     public void setFramesTextureData(List<int[][]> newFramesTextureData) {
         // NO-OP
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + super.toString();
     }
 }

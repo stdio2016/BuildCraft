@@ -11,18 +11,15 @@ import java.util.List;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumFacing.Axis;
-import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 
-import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
@@ -34,7 +31,7 @@ import buildcraft.lib.tile.TileBC_Neptune;
 
 import buildcraft.factory.tile.TileTank;
 
-public class BlockTank extends BlockBCTile_Neptune implements ICustomPipeConnection {
+public class BlockTank extends BlockBCTile_Neptune implements ICustomPipeConnection, ITankBlockConnector {
     private static final IProperty<Boolean> JOINED_BELOW = BuildCraftProperties.JOINED_BELOW;
     private static final AxisAlignedBB BOUNDING_BOX = new AxisAlignedBB(2 / 16D, 0 / 16D, 2 / 16D, 14 / 16D, 16 / 16D, 14 / 16D);
 
@@ -43,7 +40,7 @@ public class BlockTank extends BlockBCTile_Neptune implements ICustomPipeConnect
     }
 
     @Override
-    public TileEntity createNewTileEntity(World world, int meta) {
+    public TileBC_Neptune createTileEntity(World world, IBlockState state) {
         return new TileTank();
     }
 
@@ -76,17 +73,14 @@ public class BlockTank extends BlockBCTile_Neptune implements ICustomPipeConnect
 
     @SideOnly(Side.CLIENT)
     @Override
-    public boolean shouldSideBeRendered(IBlockState blockState, IBlockAccess world, BlockPos pos, EnumFacing side) {
-        return side.getAxis() != Axis.Y || !(world.getBlockState(pos.offset(side)).getBlock() instanceof BlockTank);
+    public boolean shouldSideBeRendered(IBlockState state, IBlockAccess world, BlockPos pos, EnumFacing side) {
+        return side.getAxis() != Axis.Y || !(world.getBlockState(pos.offset(side)).getBlock() instanceof ITankBlockConnector);
     }
 
     @Override
     public IBlockState getActualState(IBlockState state, IBlockAccess world, BlockPos pos) {
-        return state
-                .withProperty(
-                        JOINED_BELOW,
-                        world.getBlockState(pos.down()).getBlock() instanceof BlockTank
-                );
+        boolean isTankBelow = world.getBlockState(pos.down()).getBlock() instanceof ITankBlockConnector;
+        return state.withProperty(JOINED_BELOW, isTankBelow);
     }
 
     @Override
@@ -98,19 +92,9 @@ public class BlockTank extends BlockBCTile_Neptune implements ICustomPipeConnect
     public int getComparatorInputOverride(IBlockState blockState, World world, BlockPos pos) {
         TileEntity tile = world.getTileEntity(pos);
         if (tile instanceof TileTank) {
-            return ((TileTank) tile).tank.getFluidAmount() * 15 / ((TileTank) tile).tank.getCapacity();
+            return ((TileTank) tile).getComparatorLevel();
         }
         return 0;
-    }
-
-    @Override
-    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY, float hitZ) {
-        TileEntity tile = world.getTileEntity(pos);
-        if (tile instanceof TileTank) {
-            TileTank tank = (TileTank) tile;
-            return tank.onActivate(player, hand);
-        }
-        return false;
     }
 
     @Override

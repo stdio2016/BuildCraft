@@ -12,7 +12,6 @@ import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
@@ -20,22 +19,19 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 
-import buildcraft.api.enums.EnumFillerPattern;
-import buildcraft.api.properties.BuildCraftProperties;
-
 import buildcraft.lib.block.BlockBCTile_Neptune;
 import buildcraft.lib.block.IBlockWithFacing;
-import buildcraft.lib.misc.BlockUtil;
+import buildcraft.lib.tile.TileBC_Neptune;
 
 import buildcraft.builders.BCBuildersGuis;
 import buildcraft.builders.tile.TileFiller;
 
 public class BlockFiller extends BlockBCTile_Neptune implements IBlockWithFacing {
-    public static final IProperty<EnumFillerPattern> PATTERN = BuildCraftProperties.FILLER_PATTERN;
+    // public static final IProperty<EnumFillerPattern> PATTERN = BuildCraftProperties.FILLER_PATTERN;
 
     public BlockFiller(Material material, String id) {
         super(material, id);
-        setDefaultState(getDefaultState().withProperty(PATTERN, EnumFillerPattern.NONE));
+        // setDefaultState(getDefaultState().withProperty(PATTERN, EnumFillerPattern.NONE));
     }
 
     // BlockState
@@ -43,15 +39,15 @@ public class BlockFiller extends BlockBCTile_Neptune implements IBlockWithFacing
     @Override
     protected void addProperties(List<IProperty<?>> properties) {
         super.addProperties(properties);
-        properties.add(PATTERN);
+        // properties.add(PATTERN);
     }
 
     @Override
     public IBlockState getActualState(IBlockState state, IBlockAccess world, BlockPos pos) {
-        TileEntity tile = BlockUtil.getTileEntityForGetActualState(world, pos);
-        if(tile instanceof TileFiller) {
+        TileEntity tile = world.getTileEntity(pos);
+        if (tile instanceof TileFiller) {
             TileFiller filler = (TileFiller) tile;
-            return state.withProperty(PATTERN, EnumFillerPattern.NONE); // FIXME
+            // return state.withProperty(PATTERN, EnumFillerPattern.NONE); // FIXME
         }
         return state;
     }
@@ -59,15 +55,16 @@ public class BlockFiller extends BlockBCTile_Neptune implements IBlockWithFacing
     // Others
 
     @Override
-    public TileEntity createNewTileEntity(World world, int meta) {
+    public TileBC_Neptune createTileEntity(World world, IBlockState state) {
         return new TileFiller();
     }
 
     @Override
-    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY, float hitZ) {
+    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand,
+        EnumFacing side, float hitX, float hitY, float hitZ) {
         TileEntity tile = world.getTileEntity(pos);
         if (tile instanceof TileFiller) {
-            if (!((TileFiller) tile).isValid()) {
+            if (!((TileFiller) tile).hasBox()) {
                 return false;
             }
         }
@@ -80,12 +77,5 @@ public class BlockFiller extends BlockBCTile_Neptune implements IBlockWithFacing
     @Override
     public boolean canBeRotated(World world, BlockPos pos, IBlockState state) {
         return false;
-    }
-    
-    @Override
-    public void addInformation(ItemStack stack, EntityPlayer player, List<String> tooltip, boolean advanced) {
-        super.addInformation(stack, player, tooltip, advanced);
-        // TODO: remove this! (Not localised b/c localisations happen AFTER this is removed)
-        tooltip.add("The icons + pattern types are WIP!");
     }
 }

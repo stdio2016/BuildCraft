@@ -6,7 +6,6 @@
 
 package buildcraft.core.statements;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 import javax.annotation.Nonnull;
@@ -40,11 +39,13 @@ public enum CoreActionProvider implements IActionProvider {
 
     @Override
     public void addExternalActions(Collection<IActionExternal> res, @Nonnull EnumFacing side, TileEntity tile) {
-        if (tile.hasCapability(TilesAPI.CAP_CONTROLLABLE, null)) {
-            IControllable controllable = tile.getCapability(TilesAPI.CAP_CONTROLLABLE, null);
-            Arrays.stream(BCCoreStatements.ACTION_MACHINE_CONTROL)
-                    .filter(action -> controllable.setControlMode(action.mode, true))
-                    .forEach(res::add);
+        IControllable controllable = tile.getCapability(TilesAPI.CAP_CONTROLLABLE, side.getOpposite());
+        if (controllable != null) {
+            for (ActionMachineControl action : BCCoreStatements.ACTION_MACHINE_CONTROL) {
+                if (controllable.acceptsControlMode(action.mode)) {
+                    res.add(action);
+                }
+            }
         }
     }
 }

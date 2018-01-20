@@ -11,6 +11,7 @@ import javax.annotation.Nonnull;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.crafting.Ingredient;
 
 import buildcraft.lib.client.guide.GuiGuide;
 import buildcraft.lib.client.guide.parts.GuidePartItem;
@@ -37,15 +38,15 @@ public class GuideCrafting extends GuidePartItem {
     private final ChangingItemStack[][] input;
     private final ChangingItemStack output;
 
-    GuideCrafting(GuiGuide gui, NonNullMatrix<ItemStack> input, @Nonnull ItemStack output) {
+    GuideCrafting(GuiGuide gui, NonNullMatrix<Ingredient> input, @Nonnull ItemStack output) {
         super(gui);
         this.input = new ChangingItemStack[input.getWidth()][input.getHeight()];
         for (int x = 0; x < input.getWidth(); x++) {
             for (int y = 0; y < input.getHeight(); y++) {
-                this.input[x][y] = ChangingItemStack.create(input.get(x, y));
+                this.input[x][y] = new ChangingItemStack(input.get(x, y));
             }
         }
-        this.output = ChangingItemStack.create(output);
+        this.output = new ChangingItemStack(output);
     }
 
     GuideCrafting(GuiGuide gui, ChangingItemStack[][] input, ChangingItemStack output) {
@@ -70,11 +71,11 @@ public class GuideCrafting extends GuidePartItem {
                 for (int itemY = 0; itemY < input[itemX].length; itemY++) {
                     GuiRectangle rect = ITEM_POSITION[itemX][itemY];
                     ItemStack stack = input[itemX][itemY].get();
-                    drawItemStack(stack, x + rect.x, y + rect.y);
+                    drawItemStack(stack, x + (int) rect.x, y + (int) rect.y);
                 }
             }
 
-            drawItemStack(output.get(), x + OUT_POSITION.x, y + OUT_POSITION.y);
+            drawItemStack(output.get(), x + (int) OUT_POSITION.x, y + (int) OUT_POSITION.y);
 
             RenderHelper.disableStandardItemLighting();
             GlStateManager.disableRescaleNormal();
@@ -95,11 +96,11 @@ public class GuideCrafting extends GuidePartItem {
                 for (int itemY = 0; itemY < input[itemX].length; itemY++) {
                     GuiRectangle rect = ITEM_POSITION[itemX][itemY];
                     ItemStack stack = input[itemX][itemY].get();
-                    testClickItemStack(stack, x + rect.x, y + rect.y);
+                    testClickItemStack(stack, x + (int) rect.x, y + (int) rect.y);
                 }
             }
 
-            testClickItemStack(output.get(), x + OUT_POSITION.x, y + OUT_POSITION.y);
+            testClickItemStack(output.get(), x + (int) OUT_POSITION.x, y + (int) OUT_POSITION.y);
         }
         current = current.nextLine(PIXEL_HEIGHT, height);
         return current;

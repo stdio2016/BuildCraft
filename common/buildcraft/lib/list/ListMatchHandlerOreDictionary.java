@@ -14,11 +14,11 @@ import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
 
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
 
 import buildcraft.api.lists.ListMatchHandler;
-
-import buildcraft.lib.misc.StackUtil;
 
 public class ListMatchHandlerOreDictionary extends ListMatchHandler {
     private static int getUppercaseCount(String s) {
@@ -36,10 +36,7 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
         int[] oreIds = OreDictionary.getOreIDs(stack);
 
         if (oreIds.length == 0) {
-            // No ore IDs? Time for the best effort plan of METADATA!
-            if (type == Type.TYPE) {
-                return StackUtil.isMatchingItem(stack, target, false, false);
-            }
+            // Unfortunately we cannot compare the items.
             return false;
         }
 
@@ -64,7 +61,8 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
             // cases in which a given stone is also used for crafting equivalents.
             String s = getBestOreString(oreNames);
             if (s != null) {
-                Set<Integer> stackIds = ListOreDictionaryCache.INSTANCE.getListOfPartialMatches(type == Type.MATERIAL ? ListOreDictionaryCache.getMaterial(s) : ListOreDictionaryCache.getType(s));
+                Set<Integer> stackIds = ListOreDictionaryCache.INSTANCE.getListOfPartialMatches(
+                    type == Type.MATERIAL ? ListOreDictionaryCache.getMaterial(s) : ListOreDictionaryCache.getType(s));
                 if (stackIds != null) {
                     for (int j : stackIds) {
                         for (int k : matchesIds) {
@@ -82,13 +80,7 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
 
     @Override
     public boolean isValidSource(Type type, @Nonnull ItemStack stack) {
-        if (OreDictionary.getOreIDs(stack).length > 0) {
-            return true;
-        }
-        if (type == Type.TYPE && stack.getHasSubtypes()) {
-            return true;
-        }
-        return false;
+        return OreDictionary.getOreIDs(stack).length > 0;
     }
 
     private static String getBestOreString(String[] oreIds) {
@@ -104,6 +96,7 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
         return s;
     }
 
+    @SideOnly(Side.CLIENT)
     @Override
     public NonNullList<ItemStack> getClientExamples(Type type, @Nonnull ItemStack stack) {
         int[] oreIds = OreDictionary.getOreIDs(stack);
@@ -113,7 +106,7 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
             // No ore IDs? Time for the best effort plan of METADATA!
             if (type == Type.TYPE) {
                 NonNullList<ItemStack> tempStack = NonNullList.create();
-                stack.getItem().getSubItems(stack.getItem(), CreativeTabs.MISC, tempStack);
+                stack.getItem().getSubItems(CreativeTabs.SEARCH, tempStack);
                 for (ItemStack is : tempStack) {
                     if (is.getItem() == stack.getItem()) {
                         stacks.add(is);
@@ -135,7 +128,8 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
         } else {
             String s = getBestOreString(oreNames);
             if (s != null) {
-                Set<Integer> stackIds = ListOreDictionaryCache.INSTANCE.getListOfPartialMatches(type == Type.MATERIAL ? ListOreDictionaryCache.getMaterial(s) : ListOreDictionaryCache.getType(s));
+                Set<Integer> stackIds = ListOreDictionaryCache.INSTANCE.getListOfPartialMatches(
+                    type == Type.MATERIAL ? ListOreDictionaryCache.getMaterial(s) : ListOreDictionaryCache.getType(s));
                 if (stackIds != null) {
                     for (int j : stackIds) {
                         stacks.addAll(OreDictionary.getOres(OreDictionary.getOreName(j)));
@@ -153,7 +147,7 @@ public class ListMatchHandlerOreDictionary extends ListMatchHandler {
         }
         for (ItemStack is : wildcard) {
             NonNullList<ItemStack> wll = NonNullList.create();
-            is.getItem().getSubItems(is.getItem(), CreativeTabs.MISC, wll);
+            is.getItem().getSubItems(CreativeTabs.MISC, wll);
             if (wll.size() > 0) {
                 stacks.remove(is);
                 stacks.addAll(wll);

@@ -2,7 +2,7 @@ language: java
 jdk:
   - oraclejdk8
 
-sudo: false
+sudo: required
 addons:
   apt:
     packages:
@@ -12,7 +12,7 @@ jobs:
   include:
     - stage: build
       install: ./gradlew setupCiWorkspace
-      script: ./gradlew build 
+      script: ./gradlew build publish
     - stage: checkstyle
       install: echo "skipping default ./gradlew assemble"
       script: ./gradlew checkstyle

@@ -13,8 +13,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
-import javax.annotation.Nonnull;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -23,24 +21,26 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import net.minecraftforge.items.IItemHandlerModifiable;
 
 import buildcraft.api.core.EnumPipePart;
 import buildcraft.api.core.IAreaProvider;
 import buildcraft.api.enums.EnumSnapshotType;
 import buildcraft.api.schematics.ISchematicBlock;
 import buildcraft.api.schematics.ISchematicEntity;
+import buildcraft.api.schematics.SchematicBlockContext;
+import buildcraft.api.schematics.SchematicEntityContext;
 import buildcraft.api.tiles.IDebuggable;
 
-import buildcraft.lib.block.BlockBCBase_Neptune;
 import buildcraft.lib.delta.DeltaInt;
 import buildcraft.lib.delta.DeltaManager;
+import buildcraft.lib.misc.AdvancementUtil;
 import buildcraft.lib.misc.BoundingBoxUtil;
 import buildcraft.lib.misc.MessageUtil;
 import buildcraft.lib.misc.NBTUtilBC;
@@ -75,6 +75,7 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
     public static final int NET_BOX = IDS.allocId("BOX");
     @SuppressWarnings("WeakerAccess")
     public static final int NET_SCAN = IDS.allocId("SCAN");
+    private static final ResourceLocation ADVANCEMENT = new ResourceLocation("buildcraftbuilders:architect");
 
     public final ItemHandlerSimple invSnapshotIn = itemManager.addInvHandler(
         "in",
@@ -112,19 +113,6 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
     }
 
     @Override
-    protected void onSlotChange(IItemHandlerModifiable handler,
-                                int slot,
-                                @Nonnull ItemStack before,
-                                @Nonnull ItemStack after) {
-        super.onSlotChange(handler, slot, before, after);
-        if (handler == invSnapshotIn) {
-            if (invSnapshotOut.getStackInSlot(0).isEmpty() && after.getItem() instanceof ItemSnapshot) {
-                snapshotType = ItemSnapshot.EnumItemSnapshotType.getFromStack(after).snapshotType;
-            }
-        }
-    }
-
-    @Override
     public void onPlacedBy(EntityLivingBase placer, ItemStack stack) {
         super.onPlacedBy(placer, stack);
         if (placer.world.isRemote) {
@@ -133,7 +121,7 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
         WorldSavedDataVolumeBoxes volumeBoxes = WorldSavedDataVolumeBoxes.get(world);
         IBlockState blockState = world.getBlockState(pos);
         BlockPos offsetPos = pos.offset(blockState.getValue(BlockArchitectTable.PROP_FACING).getOpposite());
-        VolumeBox volumeBox = volumeBoxes.getBoxAt(offsetPos);
+        VolumeBox volumeBox = volumeBoxes.getVolumeBoxAt(offsetPos);
         TileEntity tile = world.getTileEntity(offsetPos);
         if (volumeBox != null) {
             box.reset();
@@ -143,6 +131,7 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
             volumeBox.locks.add(
                 new Lock(
                     new Lock.Cause.CauseBlock(pos, blockState.getBlock()),
+                    new Lock.Target.TargetRemove(),
                     new Lock.Target.TargetResize(),
                     new Lock.Target.TargetUsedByMachine(
                         Lock.Target.TargetUsedByMachine.EnumType.STRIPES_READ
@@ -180,6 +169,9 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
 
         if (!invSnapshotIn.getStackInSlot(0).isEmpty() && invSnapshotOut.getStackInSlot(0).isEmpty() && isValid) {
             if (!scanning) {
+                snapshotType = ItemSnapshot.EnumItemSnapshotType.getFromStack(
+                    invSnapshotIn.getStackInSlot(0)
+                ).snapshotType;
                 int size = box.size().getX() * box.size().getY() * box.size().getZ();
                 size /= snapshotType.maxPerTick;
                 deltaProgress.addDelta(0, size, 1);
@@ -214,8 +206,8 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
         BlockPos size = box.size();
         if (templateScannedBlocks == null || blueprintScannedData == null) {
             boxIterator = new BoxIterator(box, EnumAxisOrder.XZY.getMinToMaxOrder(), true);
-            templateScannedBlocks = new BitSet(size.getX() * size.getY() * size.getZ());
-            blueprintScannedData = new int[size.getX() * size.getY() * size.getZ()];
+            templateScannedBlocks = new BitSet(Snapshot.getDataSize(size));
+            blueprintScannedData = new int[Snapshot.getDataSize(size)];
         }
 
         // Read from world
@@ -248,19 +240,24 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
     }
 
     private ISchematicBlock readSchematicBlock(BlockPos worldScanPos) {
-        return SchematicBlockManager.getSchematicBlock(
+        return SchematicBlockManager.getSchematicBlock(new SchematicBlockContext(
             world,
-            pos.offset(world.getBlockState(pos).getValue(BlockBCBase_Neptune.PROP_FACING).getOpposite()),
+            box.min(),
             worldScanPos,
             world.getBlockState(worldScanPos),
             world.getBlockState(worldScanPos).getBlock()
-        );
+        ));
     }
 
     private void scanEntities() {
-        BlockPos basePos = pos.offset(world.getBlockState(pos).getValue(BlockArchitectTable.PROP_FACING).getOpposite());
         world.getEntitiesWithinAABB(Entity.class, box.getBoundingBox()).stream()
-            .map(entity -> SchematicEntityManager.getSchematicEntity(world, basePos, entity))
+            .map(entity ->
+                SchematicEntityManager.getSchematicEntity(new SchematicEntityContext(
+                    world,
+                    box.min(),
+                    entity
+                ))
+            )
             .filter(Objects::nonNull)
             .forEach(blueprintScannedEntities::add);
     }
@@ -309,6 +306,7 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
         blueprintScannedEntities.clear();
         boxIterator = null;
         sendNetworkUpdate(NET_RENDER_DATA);
+        AdvancementUtil.unlockAdvancement(getOwner().getId(), ADVANCEMENT);
     }
 
     @Override
@@ -318,8 +316,7 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
             if (id == NET_RENDER_DATA) {
                 writePayload(NET_BOX, buffer, side);
                 buffer.writeString(name);
-            }
-            if (id == NET_BOX) {
+            } else if (id == NET_BOX) {
                 box.writeData(buffer);
                 buffer.writeBoolean(markerBox);
             }
@@ -333,12 +330,10 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
             if (id == NET_RENDER_DATA) {
                 readPayload(NET_BOX, buffer, side, ctx);
                 name = buffer.readString();
-            }
-            if (id == NET_BOX) {
+            } else if (id == NET_BOX) {
                 box.readData(buffer);
                 markerBox = buffer.readBoolean();
-            }
-            if (id == NET_SCAN) {
+            } else if (id == NET_SCAN) {
                 ClientArchitectTables.SCANNED_BLOCKS.put(
                     MessageUtil.readBlockPos(buffer),
                     ClientArchitectTables.START_SCANNED_BLOCK_VALUE
@@ -377,7 +372,6 @@ public class TileArchitectTable extends TileBC_Neptune implements ITickable, IDe
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
         left.add("box:");
         left.add(" - min = " + box.min());

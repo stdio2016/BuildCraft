@@ -11,15 +11,14 @@ import java.util.List;
 import net.minecraft.util.EnumFacing;
 
 import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 
 import buildcraft.api.core.EnumPipePart;
+import buildcraft.api.tiles.IDebuggable;
 
 import buildcraft.lib.fluid.Tank;
 import buildcraft.lib.misc.CapUtil;
 
-public class TileAutoWorkbenchFluids extends TileAutoWorkbenchBase {
+public class TileAutoWorkbenchFluids extends TileAutoWorkbenchBase implements IDebuggable {
     private final Tank tank1 = new Tank("tank1", Fluid.BUCKET_VOLUME * 6, this);
     private final Tank tank2 = new Tank("tank2", Fluid.BUCKET_VOLUME * 6, this);
 
@@ -32,16 +31,9 @@ public class TileAutoWorkbenchFluids extends TileAutoWorkbenchBase {
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
-        super.getDebugInfo(left, right, side);
         left.add("Tanks:");
         left.add("  " + tank1.getContentsString());
         left.add("  " + tank2.getContentsString());
-    }
-
-    @Override
-    public boolean canWork() {
-        return false;
     }
 }

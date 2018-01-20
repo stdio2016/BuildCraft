@@ -29,6 +29,7 @@ import buildcraft.api.core.IAreaProvider;
 import buildcraft.api.core.IBox;
 
 import buildcraft.lib.client.render.laser.LaserData_BC8;
+import buildcraft.lib.client.render.laser.LaserData_BC8.LaserType;
 import buildcraft.lib.misc.MessageUtil;
 import buildcraft.lib.misc.NBTUtilBC;
 import buildcraft.lib.misc.PositionUtil;
@@ -36,10 +37,18 @@ import buildcraft.lib.misc.VecUtil;
 
 /** MUTABLE integer variant of AxisAlignedBB, with a few BC-specific methods */
 public class Box implements IBox {
+
+    // Client side cache: used to compare current laser type with previously
+    // rendered data.
+
     @SideOnly(Side.CLIENT)
     public LaserData_BC8[] laserData;
+
     @SideOnly(Side.CLIENT)
     public BlockPos lastMin, lastMax;
+
+    @SideOnly(Side.CLIENT)
+    public LaserType lastType;
 
     private BlockPos min, max;
 
@@ -155,9 +164,9 @@ public class Box implements IBox {
     @Override
     public boolean contains(Vec3d p) {
         AxisAlignedBB bb = getBoundingBox();
-        if (p.xCoord < bb.minX || p.xCoord >= bb.maxX) return false;
-        if (p.yCoord < bb.minY || p.yCoord >= bb.maxY) return false;
-        if (p.zCoord < bb.minZ || p.zCoord >= bb.maxZ) return false;
+        if (p.x < bb.minX || p.x >= bb.maxX) return false;
+        if (p.y < bb.minY || p.y >= bb.maxY) return false;
+        if (p.z < bb.minZ || p.z >= bb.maxZ) return false;
         return true;
     }
 
@@ -175,6 +184,7 @@ public class Box implements IBox {
         return max;
     }
 
+    @Override
     public BlockPos size() {
         if (!isInitialized()) return BlockPos.ORIGIN;
         return max.subtract(min).add(VecUtil.POS_ONE);
@@ -186,13 +196,6 @@ public class Box implements IBox {
 
     public Vec3d centerExact() {
         return new Vec3d(size()).scale(0.5).add(new Vec3d(min()));
-    }
-
-    public Box rotateLeft() {
-        Matrix4i mat = Matrix4i.makeRotLeftTranslatePositive(this);
-        BlockPos newMin = mat.multiplyPosition(min);
-        BlockPos newMax = mat.multiplyPosition(max);
-        return new Box(newMin, newMax);
     }
 
     @Override
@@ -208,7 +211,7 @@ public class Box implements IBox {
         return this;
     }
 
-    /** IMPORTANT: Use {@link #contains(Vec3d)}instead of the returned {@link AxisAlignedBB#isVecInside(Vec3d)} as the
+    /** IMPORTANT: Use {@link #contains(Vec3d)}instead of the returned {@link AxisAlignedBB#contains(Vec3d)} as the
      * logic is different! */
     public AxisAlignedBB getBoundingBox() {
         return new AxisAlignedBB(min, max.add(VecUtil.POS_ONE));
@@ -245,8 +248,19 @@ public class Box implements IBox {
         return PositionUtil.randomBlockPos(rand, min, max.add(1, 1, 1));
     }
 
+    /** Delegate for {@link PositionUtil#isCorner(BlockPos, BlockPos, BlockPos)} */
+    public boolean isCorner(BlockPos pos) {
+        return PositionUtil.isCorner(min, max, pos);
+    }
+
+    /** Delegate for {@link PositionUtil#isOnEdge(BlockPos, BlockPos, BlockPos)} */
     public boolean isOnEdge(BlockPos pos) {
         return PositionUtil.isOnEdge(min, max, pos);
+    }
+
+    /** Delegate for {@link PositionUtil#isOnFace(BlockPos, BlockPos, BlockPos)} */
+    public boolean isOnFace(BlockPos pos) {
+        return PositionUtil.isOnFace(min, max, pos);
     }
 
     public boolean doesIntersectWith(Box box) {
@@ -267,6 +281,14 @@ public class Box implements IBox {
             return new Box(min2, max2);
         }
         return null;
+    }
+
+    /** Calculates the total number of blocks on the edge. This is identical to (but faster than) calling
+     * {@link #getBlocksOnEdge()}.{@link List#size() size()}
+     * 
+     * @return The size of the list returned by {@link #getBlocksOnEdge()}. */
+    public int getBlocksOnEdgeCount() {
+        return PositionUtil.getCountOnEdge(min(), max());
     }
 
     public void readData(PacketBuffer stream) {

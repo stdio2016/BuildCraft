@@ -1,4 +1,4 @@
-## Welcome to Buildcraft on GitHub
+## Welcome to BuildCraft on GitHub
 
 ### Reporting an issue
 
@@ -25,7 +25,7 @@ BuildCraft, being an open-source project, gives you the right to submit a pull r
 ### Contributing
 
 If you wish to submit a pull request to fix bugs or broken behaviour feel free to do so. If you would like to add 
-features or change existing behaviour or balance, please discuss it on the feature ideas board before submitting a PR (http://mod-buildcraft.com/forums/index.php?board=7.0).
+features or change existing behaviour or balance, please discuss it on discord before submitting a PR (https://discord.gg/v4geqgA).
 
 Do not submit pull requests which solely "fix" formatting. As these kinds of changes are usually very intrusive in commit history and everyone has their own idea what "proper formatting" is, they should be done by one of the main contributors. 
 Please only submit "code cleanup", if the changes actually have a substantial impact on readability.
@@ -40,18 +40,18 @@ PR implementing new features or changing large portions of code are helpful. But
   * You are using the dev version on a normal game instance (or vice versa)
 * Render issue (Quarry causes flickering) - Try without OptiFine first! This is a known issue with some versions of OptiFine.
 
-### Compiling and packaging Buildcraft
+### Compiling and packaging BuildCraft
 1. Ensure that `Java` (found [here](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html)), `Git` (found [here](http://git-scm.com/)) are installed correctly on your system.
  * Optional: Install `Gradle` (found [here](http://www.gradle.org/downloads))
 1. Create a base directory for the build
-1. Clone the Buildcraft repository into 'baseDir/BuildCraft/'
+1. Clone the BuildCraft repository into 'baseDir/BuildCraft/'
 1. Clone (and update) the submodules into 'baseDir/BuildCraft with 'git submodule init' and 'git submodule update'
 1. Navigate to basedir/BuildCraft in a shell and run one of two commands:
  * `gradlew setupCIWorkspace build` to just build a current jar (this may take a while).
  * `gradlew setupDecompWorkspace` to setup a complete development environment.
  * With `Gradle` installed: use `gradle` instead of `gradlew`
  * On Windows: use `gradlew.bat` instead of `gradlew`
-1. The compiles and obfuscated module jars will be in 'baseDir/BuildCraft/modules'
+1. The compiles and obfuscated module jars will be in 'baseDir/BuildCraft/build/libs/&lt;build number&gt;/modules'
 
 Your directory structure should look like this before running gradle:
 ***
@@ -100,14 +100,14 @@ Instructions for depending on BC 7.1.x can be found [here](https://github.com/Bu
 
 8.0.x hasn't been finished yet, so there are no instructions for depending on it :(
 
-The following instructions are for BC 7.2.x (1.8.9):
+The following instructions are for BC 7.99.12 (1.12.2):
 
 Add the following to your build.gradle file:
 ```
 repositories {
-    ivy {
+    maven {
         name "BuildCraft"
-        artifactPattern "http://www.mod-buildcraft.com/releases/BuildCraft/[revision]/[module]-[revision](-[classifier]).[ext]"
+        url = "https://mod-buildcraft.com/maven"
     }
 }
 ````
@@ -115,14 +115,21 @@ repositories {
 If you want to depend on JUST the API then do this:
 ````
 dependencies {
-    deobfCompile name: "buildcraft", version: "7.2.5", classifier: "api"
+    deobfCompile "com.mod-buildcraft:buildcraft-api:7.99.12"
+}
+````
+
+If you want to depend on JUST the lib then do this:
+````
+dependencies {
+    deobfCompile "com.mod-buildcraft:buildcraft-lib:7.99.12"
 }
 ````
 
 If you want to depend on the whole of buildcraft do this:
 ```
 dependencies {
-    deobfCompile name: "buildcraft", version: "7.2.5"
+    deobfCompile "com.mod-buildcraft:buildcraft:7.99.12"
 }
 ```
-Where `7.2.5` is the desired version of BuildCraft.
+Where `7.99.12` is the desired version of BuildCraft.

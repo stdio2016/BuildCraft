@@ -66,20 +66,15 @@ public abstract class VariablePartCuboidBase extends JsonVariableModelPart {
                     quad.texFromSprite(data.sprite);
                     quad.setSprite(data.sprite);
                     quad.setShade(s);
-                    if (data.invertNormal) {
+                    if (data.bothSides) {
+                        addTo.add(quad.copyAndInvertNormal());
+                    } else if (data.invertNormal) {
                         quad = quad.copyAndInvertNormal();
                     }
                     addTo.add(quad);
                 }
             }
         }
-    }
-
-    private static float[] bakePosition(INodeDouble[] in) {
-        float x = (float) in[0].evaluate() / 16f;
-        float y = (float) in[1].evaluate() / 16f;
-        float z = (float) in[2].evaluate() / 16f;
-        return new float[] { x, y, z };
     }
 
     protected abstract VariableFaceData getFaceData(EnumFacing side, ITextureGetter spriteLookup);
@@ -89,5 +84,6 @@ public abstract class VariablePartCuboidBase extends JsonVariableModelPart {
         public TextureAtlasSprite sprite;
         public int rotations = 0;
         public boolean invertNormal = false;
+        public boolean bothSides = false;
     }
 }

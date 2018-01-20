@@ -12,7 +12,9 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
+import net.minecraft.block.Block;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -33,7 +35,7 @@ public class InventoryUtil {
     // Drops
 
     public static void dropAll(World world, Vec3d vec, IItemHandlerModifiable handler) {
-        dropAll(world, vec.xCoord, vec.yCoord, vec.zCoord, handler);
+        dropAll(world, vec.x, vec.y, vec.z, handler);
     }
 
     public static void dropAll(World world, BlockPos pos, IItemHandlerModifiable handler) {
@@ -56,7 +58,11 @@ public class InventoryUtil {
     }
 
     public static void drop(World world, BlockPos pos, @Nonnull ItemStack stack) {
-        drop(world, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, stack);
+        Block.spawnAsEntity(world, pos, stack);
+    }
+
+    public static void drop(World world, Vec3d vec, @Nonnull ItemStack stack) {
+        drop(world, vec.x, vec.y, vec.z, stack);
     }
 
     public static void drop(World world, double x, double y, double z, @Nonnull ItemStack stack) {
@@ -93,7 +99,8 @@ public class InventoryUtil {
      * around. Will make sure that the location from which the items are coming from (identified by the from parameter)
      * isn't used again so that entities doesn't go backwards. Returns true if successful, false otherwise. */
     @Nonnull
-    public static ItemStack addToRandomInjectable(World world, BlockPos pos, EnumFacing ignore, @Nonnull ItemStack stack) {
+    public static ItemStack addToRandomInjectable(World world, BlockPos pos, EnumFacing ignore,
+        @Nonnull ItemStack stack) {
         if (stack.isEmpty()) {
             return StackUtil.EMPTY;
         }
@@ -127,6 +134,16 @@ public class InventoryUtil {
             if (!stack.isEmpty()) {
                 dst.add(stack);
             }
+        }
+    }
+
+    /** Adds the given {@link ItemStack} to the player's inventory, or drops it in front of them if their was not enough
+     * room. */
+    public static void addToPlayer(EntityPlayer player, ItemStack stack) {
+        if (player.inventory.addItemStackToInventory(stack)) {
+            player.inventoryContainer.detectAndSendChanges();
+        } else {
+            player.dropItem(stack, false, false);
         }
     }
 

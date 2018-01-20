@@ -126,9 +126,6 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
                 BlockPos blockPos = new BlockPos(pos.getX(), y, pos.getZ());
                 world.setBlockState(blockPos, BCFactoryBlocks.tube.getDefaultState());
             }
-            if (wantedLength == 0) {
-                sendNetworkUpdate(NET_RENDER_DATA);
-            }
             currentLength = wantedLength = newLength;
             sendNetworkUpdate(NET_WANTED_Y);
         }
@@ -171,7 +168,7 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
         }
         nbt.setInteger("wantedLength", wantedLength);
         nbt.setInteger("progress", progress);
-        nbt.setTag("mj_battery", battery.serializeNBT());
+        nbt.setTag("battery", battery.serializeNBT());
         return nbt;
     }
 
@@ -183,7 +180,11 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
         }
         wantedLength = nbt.getInteger("wantedLength");
         progress = nbt.getInteger("progress");
-        battery.deserializeNBT(nbt.getCompoundTag("mj_battery"));
+        // TODO: remove in next version
+        if (nbt.hasKey("mj_battery")) {
+            nbt.setTag("battery", nbt.getTag("mj_battery"));
+        }
+        battery.deserializeNBT(nbt.getCompoundTag("battery"));
     }
 
     // Networking

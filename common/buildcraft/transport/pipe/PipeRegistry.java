@@ -9,12 +9,14 @@ package buildcraft.transport.pipe;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableList;
 
+import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
 
 import buildcraft.api.core.InvalidInputDataException;
@@ -22,24 +24,16 @@ import buildcraft.api.transport.pipe.IItemPipe;
 import buildcraft.api.transport.pipe.IPipeRegistry;
 import buildcraft.api.transport.pipe.PipeDefinition;
 
-import buildcraft.lib.item.ItemManager;
+import buildcraft.lib.registry.RegistrationHelper;
 
 import buildcraft.transport.item.ItemPipeHolder;
 
 public enum PipeRegistry implements IPipeRegistry {
     INSTANCE;
 
+    private final RegistrationHelper helper = new RegistrationHelper();
     private final Map<ResourceLocation, PipeDefinition> definitions = new HashMap<>();
     private final Map<PipeDefinition, IItemPipe> pipeItems = new IdentityHashMap<>();
-
-    @Override
-    public ItemPipeHolder registerPipeAndItem(PipeDefinition definition) {
-        registerPipe(definition);
-        ItemPipeHolder item = new ItemPipeHolder(definition);
-        ItemManager.register(item);
-        setItemForPipe(definition, item);
-        return item;
-    }
 
     @Override
     public void registerPipe(PipeDefinition definition) {
@@ -47,13 +41,36 @@ public enum PipeRegistry implements IPipeRegistry {
     }
 
     @Override
-    public void setItemForPipe(PipeDefinition definition, IItemPipe item) {
-        if (definition == null) throw new NullPointerException("definition");
+    public void setItemForPipe(PipeDefinition definition, @Nullable IItemPipe item) {
+        if (definition == null) {
+            throw new NullPointerException("definition");
+        }
         if (item == null) {
             pipeItems.remove(definition);
         } else {
             pipeItems.put(definition, item);
         }
+    }
+
+    @Override
+    public ItemPipeHolder createItemForPipe(PipeDefinition definition) {
+        ItemPipeHolder item = ItemPipeHolder.createAndTag(definition);
+        helper.addForcedItem(item);
+        if (definitions.values().contains(definition)) {
+            setItemForPipe(definition, item);
+        }
+        return item;
+    }
+
+    @Override
+    public IItemPipe createUnnamedItemForPipe(PipeDefinition definition, Consumer<Item> postCreate) {
+        ItemPipeHolder item = ItemPipeHolder.create(definition);
+        postCreate.accept(item);
+        helper.addForcedItem(item);
+        if (definitions.values().contains(definition)) {
+            setItemForPipe(definition, item);
+        }
+        return item;
     }
 
     @Override

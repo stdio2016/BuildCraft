@@ -20,11 +20,11 @@ import buildcraft.transport.statements.ActionPipeColor;
 import buildcraft.transport.statements.ActionPipeDirection;
 import buildcraft.transport.statements.ActionPipeSignal;
 import buildcraft.transport.statements.ActionPowerPulsar;
-import buildcraft.transport.statements.TransportActionProvider;
-import buildcraft.transport.statements.TransportTriggerProvider;
+import buildcraft.transport.statements.ActionProviderGates;
 import buildcraft.transport.statements.TriggerLightSensor;
 import buildcraft.transport.statements.TriggerParameterSignal;
 import buildcraft.transport.statements.TriggerPipeSignal;
+import buildcraft.transport.statements.TriggerProviderGates;
 
 public class BCTransportStatements {
 
@@ -77,12 +77,12 @@ public class BCTransportStatements {
             ACTION_PIPE_DIRECTION[face.ordinal()] = new ActionPipeDirection(face);
         }
 
-        StatementManager.registerParameterClass(TriggerParameterSignal.class);
-        StatementManager.registerParameterClass(ActionParameterSignal.class);
+        StatementManager.registerParameter(TriggerParameterSignal::readFromNbt, TriggerParameterSignal::readFromBuf);
+        StatementManager.registerParameter(ActionParameterSignal::readFromNbt);
     }
 
     public static void preInit() {
-        StatementManager.registerTriggerProvider(TransportTriggerProvider.INSTANCE);
-        StatementManager.registerActionProvider(TransportActionProvider.INSTANCE);
+        StatementManager.registerTriggerProvider(TriggerProviderGates.INSTANCE);
+        StatementManager.registerActionProvider(ActionProviderGates.INSTANCE);
     }
 }

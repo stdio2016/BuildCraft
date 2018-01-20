@@ -10,17 +10,20 @@ import buildcraft.api.facades.FacadeAPI;
 import buildcraft.api.transport.pipe.PipeDefinition;
 
 import buildcraft.lib.item.ItemBC_Neptune;
-import buildcraft.lib.item.ItemManager;
+import buildcraft.lib.registry.RegistrationHelper;
 
 import buildcraft.transport.item.ItemPipeHolder;
 import buildcraft.transport.item.ItemPluggableFacade;
 import buildcraft.transport.item.ItemPluggableGate;
 import buildcraft.transport.item.ItemPluggableLens;
-import buildcraft.transport.item.ItemPluggablePulsar;
 import buildcraft.transport.item.ItemPluggableSimple;
 import buildcraft.transport.item.ItemWire;
+import buildcraft.transport.pipe.PipeRegistry;
+import buildcraft.transport.plug.PluggablePulsar;
 
 public class BCTransportItems {
+    private static final RegistrationHelper HELPER = new RegistrationHelper();
+
     public static ItemBC_Neptune waterproof;
 
     public static ItemPipeHolder pipeStructure;
@@ -75,21 +78,21 @@ public class BCTransportItems {
     public static ItemPipeHolder pipeItemStripes;
 
     public static ItemPluggableSimple plugBlocker;
+    public static ItemPluggableSimple plugPowerAdaptor;
     public static ItemPluggableGate plugGate;
     public static ItemPluggableLens plugLens;
-    public static ItemPluggablePulsar plugPulsar;
+    public static ItemPluggableSimple plugPulsar;
     public static ItemPluggableSimple plugLightSensor;
     public static ItemPluggableFacade plugFacade;
 
     public static ItemWire wire;
 
     public static void preInit() {
-        waterproof = ItemManager.register(new ItemBC_Neptune("item.waterproof"));
-
-        // Register them in order of type -- item, fluid, power
+        waterproof = HELPER.addItem(new ItemBC_Neptune("item.waterproof"));
 
         pipeStructure = makePipeItem(BCTransportPipes.structure);
 
+        // Register them in order of type -- item, fluid, power
         pipeItemWood = makePipeItem(BCTransportPipes.woodItem);
         pipeItemCobble = makePipeItem(BCTransportPipes.cobbleItem);
         pipeItemStone = makePipeItem(BCTransportPipes.stoneItem);
@@ -128,22 +131,22 @@ public class BCTransportItems {
         // pipePowerIron = makePipeItem(BCTransportPipes.ironPower);
         pipePowerSandstone = makePipeItem(BCTransportPipes.sandstonePower);
 
-        plugBlocker = ItemManager.register(new ItemPluggableSimple("item.plug.blocker", BCTransportPlugs.blocker));
-        plugGate = ItemManager.register(new ItemPluggableGate("item.plug.gate"));
-        plugLens = ItemManager.register(new ItemPluggableLens("item.plug.lens"));
-        plugPulsar = ItemManager.register(new ItemPluggablePulsar("item.plug.pulsar"));
-        plugLightSensor = ItemManager.register(new ItemPluggableSimple("item.plug.light_sensor", BCTransportPlugs.lightSensor));
-        plugFacade = ItemManager.register(new ItemPluggableFacade("item.plug.facade"));
+        plugBlocker = HELPER.addItem(new ItemPluggableSimple("item.plug.blocker", BCTransportPlugs.blocker));
+        plugPowerAdaptor = HELPER.addItem(new ItemPluggableSimple("item.plug.power_adaptor",
+            BCTransportPlugs.powerAdaptor, ItemPluggableSimple.PIPE_BEHAVIOUR_ACCEPTS_RS_POWER));
+        plugGate = HELPER.addItem(new ItemPluggableGate("item.plug.gate"));
+        plugLens = HELPER.addItem(new ItemPluggableLens("item.plug.lens"));
+        plugPulsar = HELPER.addItem(new ItemPluggableSimple("item.plug.pulsar", BCTransportPlugs.pulsar,
+            PluggablePulsar::new, ItemPluggableSimple.PIPE_BEHAVIOUR_ACCEPTS_RS_POWER));
+        plugLightSensor =
+            HELPER.addItem(new ItemPluggableSimple("item.plug.light_sensor", BCTransportPlugs.lightSensor));
+        plugFacade = HELPER.addItem(new ItemPluggableFacade("item.plug.facade"));
         FacadeAPI.facadeItem = plugFacade;
 
-        wire = ItemManager.register(new ItemWire("item.wire"));
+        wire = HELPER.addItem(new ItemWire("item.wire"));
     }
 
     public static ItemPipeHolder makePipeItem(PipeDefinition def) {
-        ItemPipeHolder item = ItemManager.register(new ItemPipeHolder(def));
-        if (item != null) {
-            item.registerWithPipeApi();
-        }
-        return item;
+        return PipeRegistry.INSTANCE.createItemForPipe(def);
     }
 }

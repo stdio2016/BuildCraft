@@ -9,6 +9,7 @@ package buildcraft.silicon.tile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
@@ -18,11 +19,13 @@ import net.minecraft.util.ITickable;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import buildcraft.api.core.SafeTimeTracker;
 import buildcraft.api.mj.ILaserTarget;
 import buildcraft.api.mj.ILaserTargetBlock;
 import buildcraft.api.mj.MjAPI;
@@ -31,6 +34,8 @@ import buildcraft.api.mj.MjCapabilityHelper;
 import buildcraft.api.properties.BuildCraftProperties;
 import buildcraft.api.tiles.IDebuggable;
 
+import buildcraft.lib.block.ILocalBlockUpdateSubscriber;
+import buildcraft.lib.block.LocalBlockUpdateNotifier;
 import buildcraft.lib.client.render.DetachedRenderer.IDetachedRenderer;
 import buildcraft.lib.misc.LocaleUtil;
 import buildcraft.lib.misc.MessageUtil;
@@ -45,14 +50,20 @@ import buildcraft.lib.tile.TileBC_Neptune;
 import buildcraft.silicon.BCSiliconBlocks;
 import buildcraft.silicon.client.render.AdvDebuggerLaser;
 
-public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable {
-    private int ticks = 0;
+public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable, ILocalBlockUpdateSubscriber {
+    private static final int TARGETING_RANGE = 6;
+
+    private final SafeTimeTracker clientLaserMoveInterval = new SafeTimeTracker(5, 10);
+    private final SafeTimeTracker serverTargetMoveInterval = new SafeTimeTracker(10, 20);
+
+    private final List<BlockPos> targetPositions = new ArrayList<>();
     private BlockPos targetPos;
+    public Vec3d laserPos;
+    private boolean worldHasUpdated = true;
+
     private final AverageLong avgPower = new AverageLong(100);
     private long averageClient;
     private final MjBattery battery;
-
-    public Vec3d laserPos;
 
     public TileLaser() {
         super();
@@ -60,15 +71,30 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
         caps.addProvider(new MjCapabilityHelper(new MjBatteryReceiver(battery)));
     }
 
-    private void findTarget() {
+    @Override
+    public int getUpdateRange() {
+        return TARGETING_RANGE;
+    }
+
+    @Override
+    public BlockPos getSubscriberPos() {
+        return getPos();
+    }
+
+    @Override
+    public void setWorldUpdated(World world, BlockPos eventPos, IBlockState oldState, IBlockState newState, int flags) {
+        this.worldHasUpdated = true;
+    }
+
+    private void findPossibleTargets() {
+        targetPositions.clear();
         IBlockState state = world.getBlockState(pos);
         if (state.getBlock() != BCSiliconBlocks.laser) {
             return;
         }
         EnumFacing face = state.getValue(BuildCraftProperties.BLOCK_FACING_6);
 
-        List<BlockPos> possible = new ArrayList<>();
-        VolumeUtil.iterateCone(world, pos, face, 6, true, (w, s, p, visible) -> {
+        VolumeUtil.iterateCone(world, pos, face, TARGETING_RANGE, true, (w, s, p, visible) -> {
             if (!visible) {
                 return;
             }
@@ -76,38 +102,49 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
             if (stateAt.getBlock() instanceof ILaserTargetBlock) {
                 TileEntity tileAt = world.getTileEntity(p);
                 if (tileAt instanceof ILaserTarget) {
-                    ILaserTarget targetAt = (ILaserTarget) tileAt;
-                    if (targetAt.getRequiredLaserPower() > 0) {
-                        possible.add(p);
-                    }
+                    targetPositions.add(p);
+
                 }
             }
         });
+    }
 
-        if (possible.isEmpty()) {
+    private void randomlyChooseTargetPos() {
+        List<BlockPos> targetsNeedingPower = new ArrayList<>();
+        for(BlockPos position: targetPositions) {
+            if (isPowerNeededAt(position)) {
+                targetsNeedingPower.add(position);
+            }
+        }
+        if (targetsNeedingPower.isEmpty()) {
             targetPos = null;
             return;
         }
+        targetPos = targetsNeedingPower.get(world.rand.nextInt(targetsNeedingPower.size()));
+    }
 
-        targetPos = possible.get(world.rand.nextInt(possible.size()));
+    private boolean isPowerNeededAt(BlockPos position) {
+        if (position != null) {
+            TileEntity tile = world.getTileEntity(position);
+            if (tile instanceof ILaserTarget) {
+                ILaserTarget target = (ILaserTarget) tile;
+                return target.getRequiredLaserPower() > 0;
+            }
+        }
+        return false;
     }
 
     private ILaserTarget getTarget() {
         if (targetPos != null) {
-            TileEntity tile = world.getTileEntity(targetPos);
-            if (tile instanceof ILaserTarget) {
-                ILaserTarget target = (ILaserTarget) tile;
-                return target.getRequiredLaserPower() > 0 ? target : null;
-            } else {
-                return null;
+            if (world.getTileEntity(targetPos) instanceof ILaserTarget) {
+                return (ILaserTarget) world.getTileEntity(targetPos);
             }
-        } else {
-            return null;
         }
+        return null;
     }
 
     private void updateLaser() {
-        if (getTarget() != null) {
+        if (targetPos != null) {
             laserPos = new Vec3d(targetPos)
                 .addVector(
                     (5 + world.rand.nextInt(6) + 0.5) / 16D,
@@ -130,21 +167,28 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
     @Override
     public void update() {
         if (world.isRemote) {
+            // set laser render position on client side
+            if (clientLaserMoveInterval.markTimeIfDelay(world) || targetPos == null) {
+                updateLaser();
+            }
             return;
         }
-        avgPower.tick();
-        ticks++;
 
-        if (getTarget() == null) {
+        // set target tile on server side
+        avgPower.tick();
+
+        BlockPos previousTargetPos = targetPos;
+        if (worldHasUpdated) {
+            findPossibleTargets();
+            worldHasUpdated = false;
+        }
+
+        if (!isPowerNeededAt(targetPos)) {
             targetPos = null;
         }
 
-        if (ticks % (10 + world.rand.nextInt(20)) == 0 || getTarget() == null) {
-            findTarget();
-        }
-
-        if (ticks % (5 + world.rand.nextInt(10)) == 0 || getTarget() == null) {
-            updateLaser();
+        if (serverTargetMoveInterval.markTimeIfDelay(world) || !isPowerNeededAt(targetPos)) {
+            randomlyChooseTargetPos();
         }
 
         ILaserTarget target = getTarget();
@@ -163,13 +207,15 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
             avgPower.clear();
         }
 
-        sendNetworkUpdate(NET_RENDER_DATA);
+        if (!Objects.equals(previousTargetPos, targetPos) || true) {
+            sendNetworkUpdate(NET_RENDER_DATA);
+        }
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
-        nbt.setTag("mj_battery", battery.serializeNBT());
+        nbt.setTag("battery", battery.serializeNBT());
         if (laserPos != null) {
             nbt.setTag("laser_pos", NBTUtilBC.writeVec3d(laserPos));
         }
@@ -183,7 +229,11 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
-        battery.deserializeNBT(nbt.getCompoundTag("mj_battery"));
+        // TODO: remove in next version
+        if (nbt.hasKey("mj_battery")) {
+            nbt.setTag("battery", nbt.getTag("mj_battery"));
+        }
+        battery.deserializeNBT(nbt.getCompoundTag("battery"));
         targetPos = NBTUtilBC.readBlockPos(nbt.getTag("target_pos"));
         laserPos = NBTUtilBC.readVec3d(nbt.getTag("laser_pos"));
         avgPower.readFromNbt(nbt, "average_power");
@@ -198,10 +248,6 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
                 buffer.writeBoolean(targetPos != null);
                 if (targetPos != null) {
                     MessageUtil.writeBlockPos(buffer, targetPos);
-                }
-                buffer.writeBoolean(laserPos != null);
-                if (laserPos != null) {
-                    MessageUtil.writeVec3d(buffer, laserPos);
                 }
                 buffer.writeLong((long) avgPower.getAverage());
             }
@@ -219,11 +265,6 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
                 } else {
                     targetPos = null;
                 }
-                if (buffer.readBoolean()) {
-                    laserPos = MessageUtil.readVec3d(buffer);
-                } else {
-                    laserPos = null;
-                }
                 averageClient = buffer.readLong();
             }
         }
@@ -235,6 +276,22 @@ public class TileLaser extends TileBC_Neptune implements ITickable, IDebuggable 
         left.add("target = " + targetPos);
         left.add("laser = " + laserPos);
         left.add("average = " + LocaleUtil.localizeMjFlow(averageClient == 0 ? (long) avgPower.getAverage() : averageClient));
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        if (!world.isRemote) {
+            LocalBlockUpdateNotifier.instance(world).registerSubscriberForUpdateNotifications(this);
+        }
+    }
+
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        if (!world.isRemote) {
+            LocalBlockUpdateNotifier.instance(world).removeSubscriberFromUpdateNotifications(this);
+        }
     }
 
     @Override

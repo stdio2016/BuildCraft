@@ -6,33 +6,29 @@
 
 package buildcraft.lib.expression;
 
-import net.minecraft.item.EnumDyeColor;
-
-import buildcraft.lib.expression.api.INodeFunc.INodeFuncLong;
+import buildcraft.lib.expression.api.NodeTypes;
 import buildcraft.lib.expression.node.value.NodeVariableDouble;
-import buildcraft.lib.misc.ColourUtil;
 
 public class DefaultContexts {
-    public static final FunctionContext STRINGS = new FunctionContext();
-    public static final FunctionContext MATH_SCALAR = new FunctionContext();
-    public static final FunctionContext MATH_VECTOR = new FunctionContext();
-    public static final FunctionContext RENDERING = new FunctionContext();
+    public static final FunctionContext MATH_SCALAR = new FunctionContext("Math: Scalar");
+    public static final FunctionContext MATH_VECTOR = new FunctionContext("Math: Vector", NodeTypes.VEC_LONG, NodeTypes.VEC_DOUBLE);
+    public static final FunctionContext RENDERING = new FunctionContext("Rendering");
+    public static final FunctionContext CONFIG = new FunctionContext("Config");
 
     public static final NodeVariableDouble RENDER_PARTIAL_TICKS;
 
-    public static final INodeFuncLong MATH_SCALAR_FUNC_ROUND;
-
-    private static final FunctionContext[] CTX_ARRAY_ALL = { STRINGS, MATH_SCALAR, MATH_VECTOR, RENDERING };
+    private static final FunctionContext[] CTX_ARRAY_ALL = { NodeTypes.STRING, MATH_SCALAR, MATH_VECTOR, RENDERING };
 
     /** Creates a new {@link FunctionContext} with all of the functions given in this class. */
     public static FunctionContext createWithAll() {
-        return new FunctionContext(CTX_ARRAY_ALL);
+        return createWithAll("all");
+    }
+
+    public static FunctionContext createWithAll(String name) {
+        return new FunctionContext(name, CTX_ARRAY_ALL);
     }
 
     static {
-        // STRINGS.put_s_s("lowercase", (a) -> a.toLowerCase(Locale.ROOT));
-        // STRINGS.put_s_s("uppercase", (a) -> a.toUpperCase(Locale.ROOT));
-        STRINGS.put_s_l("length", String::length);
         // STRINGS.put_sl_s("string_at", (a, b) -> Character.toString(a.charAt(b)));
         // STRINGS.put_sl_s("substring", (a, b) -> a.substring(b));
         // STRINGS.put_sll_s("substring", (a, b, c) -> a.substring(b, c));
@@ -41,13 +37,13 @@ public class DefaultContexts {
         MATH_SCALAR.putConstantDouble("pi", Math.PI);
         MATH_SCALAR.putConstantDouble("e", Math.E);
 
-        MATH_SCALAR.put_l_l("abs_long", Math::abs);
-        MATH_SCALAR.put_d_d("abs_double", Math::abs);
+        MATH_SCALAR.put_l_l("abs", Math::abs, a -> "abs( " + a + ")");
+        MATH_SCALAR.put_d_d("abs", Math::abs, a -> "abs( " + a + ")");
 
-        MATH_SCALAR_FUNC_ROUND = MATH_SCALAR.put_d_l("round", Math::round);
-        MATH_SCALAR.put_d_l("floor", (a) -> (long) Math.floor(a));
-        MATH_SCALAR.put_d_l("ceil", (a) -> (long) Math.ceil(a));
-        MATH_SCALAR.put_d_l("sign", (a) -> a == 0 ? 0 : a < 0 ? -1 : 1);
+        MATH_SCALAR.put_d_l("round", Math::round, a -> "round( " + a + ")");
+        MATH_SCALAR.put_d_l("floor", (a) -> (long) Math.floor(a), a -> "floor( " + a + ")");
+        MATH_SCALAR.put_d_l("ceil", (a) -> (long) Math.ceil(a), a -> "ceil( " + a + ")");
+        MATH_SCALAR.put_d_l("sign", (a) -> a == 0 ? 0 : a < 0 ? -1 : 1, a -> "sign( " + a + ")");
 
         MATH_SCALAR.put_d_d("log", Math::log);
         MATH_SCALAR.put_d_d("log10", Math::log10);
@@ -71,11 +67,14 @@ public class DefaultContexts {
         MATH_SCALAR.put_d_d("cosh", Math::cosh);
         MATH_SCALAR.put_d_d("tanh", Math::tanh);
 
-        MATH_SCALAR.put_ll_l("min_long", Math::min);
-        MATH_SCALAR.put_ll_l("max_long", Math::max);
-        MATH_SCALAR.put_dd_d("min_double", Math::min);
-        MATH_SCALAR.put_dd_d("max_double", Math::max);
+        MATH_SCALAR.put_ll_l("min", Math::min);
+        MATH_SCALAR.put_ll_l("max", Math::max);
+        MATH_SCALAR.put_dd_d("min", Math::min);
+        MATH_SCALAR.put_dd_d("max", Math::max);
         MATH_SCALAR.put_dd_d("pow", Math::pow);
+
+        MATH_SCALAR.put_ddd_d("clamp", (c, min, max) -> Math.max(Math.min(c, max), min));
+        MATH_SCALAR.put_lll_l("clamp", (c, min, max) -> Math.max(Math.min(c, max), min));
 
         // MATH_VECTOR.putConstantVecLong("origin", VecLong.ZERO);
         // MATH_VECTOR.putConstantVecLong("vec_zero", VecLong.ZERO);
@@ -161,20 +160,6 @@ public class DefaultContexts {
         // MATH_VECTOR.put_vdddd_vd("div", (a, b, c, d) -> a.div(b, c, d, 0));
         // MATH_VECTOR.put_vddddd_vd("div", (a, b, c, d, e) -> a.div(b, c, d, e));
 
-        RENDERING.put_s_l("convertColourToAbgr", DefaultContexts::convertColourToAbgr);
-        RENDERING.put_s_l("convertColourToArgb", DefaultContexts::convertColourToArgb);
         RENDER_PARTIAL_TICKS = RENDERING.putVariableDouble("partial_ticks");
-    }
-
-    private static long convertColourToAbgr(String c) {
-        EnumDyeColor colour = ColourUtil.parseColourOrNull(c);
-        if (colour == null) return 0xFF_FF_FF_FF;
-        return 0xFF_00_00_00 | ColourUtil.swapArgbToAbgr(ColourUtil.getLightHex(colour));
-    }
-
-    private static long convertColourToArgb(String c) {
-        EnumDyeColor colour = ColourUtil.parseColourOrNull(c);
-        if (colour == null) return 0xFF_FF_FF_FF;
-        return 0xFF_00_00_00 | ColourUtil.getLightHex(colour);
     }
 }

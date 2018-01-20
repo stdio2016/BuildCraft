@@ -8,16 +8,21 @@ package buildcraft.lib.gui;
 
 import org.lwjgl.opengl.GL11;
 
+import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.VertexBuffer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.ResourceLocation;
 
-import buildcraft.lib.client.sprite.ISprite;
-import buildcraft.lib.client.sprite.RawSprite;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+
+import buildcraft.api.core.render.ISprite;
+
+import buildcraft.lib.client.sprite.SpriteRaw;
 import buildcraft.lib.gui.pos.IGuiArea;
 
+@SideOnly(Side.CLIENT)
 public class GuiIcon implements ISimpleDrawable {
     public final ISprite sprite;
     public final int textureSize;
@@ -30,15 +35,19 @@ public class GuiIcon implements ISimpleDrawable {
         this.height = (int) (Math.abs(sprite.getInterpV(1) - sprite.getInterpV(0)) * textureSize);
     }
 
-    public GuiIcon(ResourceLocation texture, int u, int v, int width, int height) {
-        this(new RawSprite(texture, u, v, width, height, 256), 256);
+    public GuiIcon(ResourceLocation texture, double u, double v, double width, double height, int texSize) {
+        this(new SpriteRaw(texture, u, v, width, height, texSize), texSize);
     }
 
-    public GuiIcon offset(int u, int v) {
-        RawSprite raw = (RawSprite) sprite;
-        float uMin = raw.uMin + u / (float) textureSize;
-        float vMin = raw.vMin + v / (float) textureSize;
-        return new GuiIcon(new RawSprite(raw.location, uMin, vMin, raw.width, raw.height), textureSize);
+    public GuiIcon(ResourceLocation texture, double u, double v, double width, double height) {
+        this(texture, u, v, width, height, 256);
+    }
+
+    public GuiIcon offset(double u, double v) {
+        SpriteRaw raw = (SpriteRaw) sprite;
+        double uMin = raw.uMin + u / textureSize;
+        double vMin = raw.vMin + v / textureSize;
+        return new GuiIcon(new SpriteRaw(raw.location, uMin, vMin, raw.width, raw.height), textureSize);
     }
 
     public DynamicTexture createDynamicTexture(int scale) {
@@ -46,10 +55,6 @@ public class GuiIcon implements ISimpleDrawable {
     }
 
     @Override
-    public void drawAt(int x, int y) {
-        this.drawScaledInside(x, y, this.width, this.height);
-    }
-
     public void drawAt(double x, double y) {
         this.drawScaledInside(x, y, this.width, this.height);
     }
@@ -146,7 +151,7 @@ public class GuiIcon implements ISimpleDrawable {
         double vMax = sprite.getInterpV(displayHeight / height);
 
         Tessellator tess = Tessellator.getInstance();
-        VertexBuffer vb = tess.getBuffer();
+        BufferBuilder vb = tess.getBuffer();
         vb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
 
         vertex(vb, xMin, yMax, uMin, vMax);
@@ -157,11 +162,11 @@ public class GuiIcon implements ISimpleDrawable {
         tess.draw();
     }
 
-    public static void drawAt(ISprite sprite, int x, int y, int size) {
+    public static void drawAt(ISprite sprite, double x, double y, double size) {
         drawAt(sprite, x, y, size, size);
     }
 
-    public static void drawAt(ISprite sprite, int x, int y, int width, int height) {
+    public static void drawAt(ISprite sprite, double x, double y, double width, double height) {
         draw(sprite, x, y, x + width, y + height);
     }
 
@@ -175,7 +180,7 @@ public class GuiIcon implements ISimpleDrawable {
         double vMax = sprite.getInterpV(1);
 
         Tessellator tess = Tessellator.getInstance();
-        VertexBuffer vb = tess.getBuffer();
+        BufferBuilder vb = tess.getBuffer();
         vb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
 
         vertex(vb, xMin, yMax, uMin, vMax);
@@ -186,7 +191,7 @@ public class GuiIcon implements ISimpleDrawable {
         tess.draw();
     }
 
-    private static void vertex(VertexBuffer vb, double x, double y, double u, double v) {
+    private static void vertex(BufferBuilder vb, double x, double y, double u, double v) {
         vb.pos(x, y, 0);
         vb.tex(u, v);
         vb.endVertex();

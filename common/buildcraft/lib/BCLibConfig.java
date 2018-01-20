@@ -1,14 +1,16 @@
 /*
- * Copyright (c) 2017 SpaceToad and the BuildCraft team
- * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not
- * distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/
+ * Copyright (c) 2017 SpaceToad and the BuildCraft team This Source Code Form is subject to the terms of the Mozilla
+ * Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at
+ * https://mozilla.org/MPL/2.0/
  */
 
 package buildcraft.lib;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.item.EnumDyeColor;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -16,6 +18,9 @@ import net.minecraft.util.EnumFacing.Axis;
 import net.minecraft.util.text.TextFormatting;
 
 import buildcraft.lib.chunkload.IChunkLoadingTile;
+import buildcraft.lib.chunkload.IChunkLoadingTile.LoadType;
+import buildcraft.lib.client.sprite.AtlasSpriteSwappable;
+import buildcraft.lib.client.sprite.AtlasSpriteVariants;
 import buildcraft.lib.misc.ColourUtil;
 import buildcraft.lib.misc.LocaleUtil;
 
@@ -23,6 +28,9 @@ import buildcraft.lib.misc.LocaleUtil;
  * by a config file, but instead by BC Core. Feel free to set them yourself, from your own configs, if you do not depend
  * on BC COre itself, and it might not be loaded in the mod environment. */
 public class BCLibConfig {
+
+    public static File guiConfigFile = null;
+
     /** If true then items and blocks will display the colour of an item (one of {@link EnumDyeColor}) with the correct
      * {@link TextFormatting} colour value.<br>
      * This changes the behaviour of {@link ColourUtil#convertColourToTextFormat(EnumDyeColor)}. */
@@ -39,16 +47,22 @@ public class BCLibConfig {
     public static int itemLifespan = 60;
 
     /** If true then fluidstacks will localize with something similar to "4B Water" rather than "4000mB of Water" when
-     * calling {@link LocaleUtil#localizeFluidStatic(net.minecraftforge.fluids.FluidStack)} */
+     * calling {@link LocaleUtil#localizeFluidStaticAmount(int)} */
     public static boolean useBucketsStatic = true;
 
     /** If true then fluidstacks will localize with something similar to "4B/s" rather than "4000mB/t" when calling
-     * {@link LocaleUtil#localizeFluidStatic(net.minecraftforge.fluids.FluidStack)} */
+     * {@link LocaleUtil#localizeFluidFlow(int)} */
     public static boolean useBucketsFlow = true;
 
     /** If true then fluidstacks and Mj will be localized with longer names (for example "1.2 Buckets per second" rather
      * than "60mB/t") */
     public static boolean useLongLocalizedName = false;
+
+    /** If true then {@link AtlasSpriteVariants#createForConfig(net.minecraft.util.ResourceLocation)} will retun
+     * {@link AtlasSpriteSwappable}, allowing for instant reloads when switching between colourblind modes and other
+     * changable things. If false it will return a normal {@link TextureAtlasSprite}. Disabling this might help if you
+     * get sprite issues with mods like optifine. */
+    public static boolean useSwappableSprites = true;
 
     public static TimeGap displayTimeGap = TimeGap.SECONDS;
 
@@ -67,7 +81,7 @@ public class BCLibConfig {
             r.run();
         }
     }
-    
+
     public enum TimeGap {
         TICKS(1),
         SECONDS(20);
@@ -79,19 +93,19 @@ public class BCLibConfig {
         }
 
         public int convertTicksToGap(int ticks) {
-            return ticks / ticksInGap;
+            return ticks * ticksInGap;
         }
 
         public long convertTicksToGap(long ticks) {
-            return ticks / ticksInGap;
+            return ticks * ticksInGap;
         }
 
         public float convertTicksToGap(float ticks) {
-            return ticks / ticksInGap;
+            return ticks * ticksInGap;
         }
 
         public double convertTicksToGap(double ticks) {
-            return ticks / ticksInGap;
+            return ticks * ticksInGap;
         }
     }
 
@@ -121,9 +135,11 @@ public class BCLibConfig {
     public enum ChunkLoaderType {
         /** Automatic chunkloading is ENABLED. */
         ON,
+
         /** Automatic chunkloading is ENABLED when using the integrated server (singleplayer + LAN), and DISABLED when
          * using a dedicated server. Currently NOT implemented */
         AUTO,
+
         /** Automatic chunkloading is DISABLED. Even for strict tiles (like the quarry) */
         OFF
     }
@@ -139,9 +155,22 @@ public class BCLibConfig {
         /** {@link TileEntity}'s that implement the {@link IChunkLoadingTile} interface will be loaded, provided they
          * DON'T return null. */
         SELF_TILES,
-    }
 
-    static {
-        configChangeListeners.add(LocaleUtil::onConfigChanged);
+        /** All {@link TileEntity}'s in the world. */
+        ALL_TILES;
+
+        public boolean canLoad(LoadType loadType) {
+            switch (this) {
+                case NONE:
+                    return false;
+                case STRICT_TILES:
+                    return loadType == LoadType.HARD;
+                case SELF_TILES:
+                case ALL_TILES:
+                    return true;
+                default:
+                    throw new IllegalStateException("Unknown ChunkLoaderLevel " + this);
+            }
+        }
     }
 }

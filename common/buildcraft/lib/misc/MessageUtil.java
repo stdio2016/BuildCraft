@@ -6,14 +6,21 @@
 
 package buildcraft.lib.misc;
 
+import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.UUID;
 
 import com.mojang.authlib.GameProfile;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.util.internal.StringUtil;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -134,9 +141,9 @@ public class MessageUtil {
     }
 
     public static void writeVec3d(PacketBuffer buffer, Vec3d vec) {
-        buffer.writeDouble(vec.xCoord);
-        buffer.writeDouble(vec.yCoord);
-        buffer.writeDouble(vec.zCoord);
+        buffer.writeDouble(vec.x);
+        buffer.writeDouble(vec.y);
+        buffer.writeDouble(vec.z);
     }
 
     public static Vec3d readVec3d(PacketBuffer buffer) {
@@ -167,15 +174,51 @@ public class MessageUtil {
 
     /** Writes a block state using the block ID and its metadata. Not suitable for full states. */
     public static void writeBlockState(PacketBuffer buf, IBlockState state) {
-        buf.writeVarInt(Block.REGISTRY.getIDForObject(state.getBlock()));
-        buf.writeVarInt(state.getBlock().getMetaFromState(state));
+        Block block = state.getBlock();
+        buf.writeVarInt(Block.REGISTRY.getIDForObject(block));
+        int meta = block.getMetaFromState(state);
+        buf.writeByte(meta);
+        IBlockState readState = block.getStateFromMeta(meta);
+        if (readState != state) {
+            buf.writeBoolean(true);
+            Map<IProperty, Comparable<?>> differingProperties = new HashMap<>();
+            for (IProperty<?> property : state.getPropertyKeys()) {
+                Comparable<?> inputValue = state.getValue(property);
+                Comparable<?> readValue = readState.getValue(property);
+                if (!inputValue.equals(readValue)) {
+                    differingProperties.put(property, inputValue);
+                }
+            }
+            buf.writeByte(differingProperties.size());
+            for (Entry<IProperty, Comparable<?>> entry : differingProperties.entrySet()) {
+                buf.writeString(entry.getKey().getName());
+                buf.writeString(entry.getKey().getName(entry.getValue()));
+            }
+        } else {
+            buf.writeBoolean(false);
+        }
     }
 
     public static IBlockState readBlockState(PacketBuffer buf) {
         int id = buf.readVarInt();
-        int meta = buf.readVarInt();
         Block block = Block.REGISTRY.getObjectById(id);
-        return block.getStateFromMeta(meta);
+        int meta = buf.readUnsignedByte();
+        IBlockState state = block.getStateFromMeta(meta);
+        if (buf.readBoolean()) {
+            int count = buf.readByte();
+            for (int p = 0; p < count; p++) {
+                String name = buf.readString(256);
+                String value = buf.readString(256);
+                IProperty<?> prop = state.getBlock().getBlockState().getProperty(name);
+                state = propertyReadHelper(state, value, prop);
+            }
+        }
+        return state;
+    }
+
+    private static <T extends Comparable<T>> IBlockState propertyReadHelper(IBlockState state, String value,
+        IProperty<T> prop) {
+        return state.withProperty(prop, prop.parseValue(value).orNull());
     }
 
     /** {@link PacketBuffer#writeEnumValue(Enum)} can only write *actual* enum values - so not null. This method allows
@@ -201,7 +244,7 @@ public class MessageUtil {
         }
     }
 
-    public static <E extends Enum<E>> void writeEnumSet(ByteBuf buffer, EnumSet<E> set, Class<E> clazz) {
+    public static <E extends Enum<E>> void writeEnumSet(ByteBuf buffer, Set<E> set, Class<E> clazz) {
         PacketBufferBC buf = PacketBufferBC.asPacketBufferBc(buffer);
         E[] constants = clazz.getEnumConstants();
         if (constants == null) throw new IllegalArgumentException("Not an enum type " + clazz);
@@ -244,23 +287,49 @@ public class MessageUtil {
      * over */
     public static void ensureEmpty(ByteBuf buf, boolean throwError, String extra) {
         int readableBytes = buf.readableBytes();
+        int rb = readableBytes;
+
+        if (buf instanceof PacketBufferBC) {
+            // TODO: Find a way of checking if the partial bits have been fully read!
+        }
+
         if (readableBytes > 0) {
+            int ri = buf.readerIndex();
             // Get a (small) bit of the data
-            byte[] selection = new byte[readableBytes > 10 ? 10 : readableBytes];
-            buf.readBytes(selection);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : selection) {
-                String h = Integer.toHexString(Byte.toUnsignedInt(b));
-                if (h.length() == 1) {
-                    sb.append(" 0");
-                } else {
-                    sb.append(" ");
+            byte[] selection = new byte[buf.writerIndex()];
+            buf.getBytes(0, selection);
+            StringBuilder sb = new StringBuilder("\n");
+
+            for (int i = 0; true; i++) {
+                int from = i * 20;
+                int to = Math.min(from + 20, selection.length);
+                if (from >= to) break;
+                byte[] part = Arrays.copyOfRange(selection, from, to);
+                for (int j = 0; j < part.length; j++) {
+                    byte b = part[j];
+                    sb.append(StringUtil.byteToHexStringPadded(b));
+                    if (from + j + 1 == ri) {
+                        sb.append('#');
+                    } else {
+                        sb.append(' ');
+                    }
                 }
-                sb.append(h);
+                int leftOver = from - to + 20;
+                for (int j = 0; j < leftOver; j++) {
+                    sb.append("   ");
+                }
+
+                sb.append("| ");
+                for (byte b : part) {
+                    char c = (char) b;
+                    if (c < 32 || c > 127) {
+                        c = ' ';
+                    }
+                    sb.append(c);
+                }
+                sb.append('\n');
             }
-            if (readableBytes > 10) {
-                sb.append(" (+").append(readableBytes - 10).append(")");
-            }
+            sb.append("-- " + rb);
 
             IllegalStateException ex = new IllegalStateException("Did not fully read the data! [" + extra + "]" + sb);
             if (throwError) {

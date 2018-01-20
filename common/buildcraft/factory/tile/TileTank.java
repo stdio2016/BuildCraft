@@ -20,10 +20,9 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 
+import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fluids.capability.FluidTankProperties;
-import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
@@ -39,7 +38,6 @@ import buildcraft.lib.fluid.FluidSmoother.FluidStackInterp;
 import buildcraft.lib.fluid.Tank;
 import buildcraft.lib.misc.CapUtil;
 import buildcraft.lib.misc.FluidUtilBC;
-import buildcraft.lib.misc.SoundUtil;
 import buildcraft.lib.misc.data.IdAllocator;
 import buildcraft.lib.net.PacketBufferBC;
 import buildcraft.lib.tile.TileBC_Neptune;
@@ -50,12 +48,25 @@ public class TileTank extends TileBC_Neptune implements ITickable, IDebuggable, 
 
     private static boolean isPlayerInteracting = false;
 
-    public final Tank tank = new Tank("tank", 16000, this);
-    public final FluidSmoother smoothedTank = new FluidSmoother(w -> createAndSendMessage(NET_FLUID_DELTA, w), tank);
+    public final Tank tank;
+    public final FluidSmoother smoothedTank;
+
+    private int lastComparatorLevel;
 
     public TileTank() {
-        tankManager.add(tank);// FIXME: SAVING IS ALL SORTS OF BUGGED
+        this(16 * Fluid.BUCKET_VOLUME);
+    }
+
+    protected TileTank(int capacity) {
+        this(new Tank("tank", capacity, null));
+    }
+
+    protected TileTank(Tank tank) {
+        tank.setTileEntity(this);
+        this.tank = tank;
+        tankManager.add(tank);
         caps.addCapabilityInstance(CapUtil.CAP_FLUIDS, this, EnumPipePart.VALUES);
+        smoothedTank = new FluidSmoother(w -> createAndSendMessage(NET_FLUID_DELTA, w), tank);
     }
 
     @Override
@@ -63,11 +74,25 @@ public class TileTank extends TileBC_Neptune implements ITickable, IDebuggable, 
         return IDS;
     }
 
+    public int getComparatorLevel() {
+        int amount = tank.getFluidAmount();
+        int cap = tank.getCapacity();
+        return amount * 14 / cap + (amount > 0 ? 1 : 0);
+    }
+
     // ITickable
 
     @Override
     public void update() {
-        smoothedTank.tick(getWorld());
+        smoothedTank.tick(world);
+
+        if (!world.isRemote) {
+            int compLevel = getComparatorLevel();
+            if (compLevel != lastComparatorLevel) {
+                lastComparatorLevel = compLevel;
+                markDirty();
+            }
+        }
     }
 
     // TileEntity
@@ -107,35 +132,13 @@ public class TileTank extends TileBC_Neptune implements ITickable, IDebuggable, 
         }
     }
 
-    public boolean onActivate(EntityPlayer player, EnumHand hand) {
-        ItemStack held = player.getHeldItem(hand);
-        if (held.isEmpty()) {
-            return false;
-        }
-        boolean replace = !player.capabilities.isCreativeMode;
-        IFluidHandlerItem flItem = FluidUtil.getFluidHandler(replace ? held : held.copy());
-        if (flItem == null) {
-            return false;
-        }
-        if (getWorld().isRemote) {
-            return true;
-        }
+    @Override
+    public boolean onActivated(EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY,
+        float hitZ) {
         isPlayerInteracting = true;
-        boolean changed = true;
-        FluidStack moved;
-        if ((moved = FluidUtilBC.move(flItem, this)) != null) {
-            SoundUtil.playBucketEmpty(getWorld(), getPos(), moved);
-        } else if ((moved = FluidUtilBC.move(this, flItem)) != null) {
-            SoundUtil.playBucketFill(getWorld(), getPos(), moved);
-        } else {
-            changed = false;
-        }
-        if (changed & replace) {
-            player.setHeldItem(hand, flItem.getContainer());
-            player.inventoryContainer.detectAndSendChanges();
-        }
+        boolean didChange = FluidUtilBC.onTankActivated(player, pos, hand, this);
         isPlayerInteracting = false;
-        return true;
+        return didChange;
     }
 
     // Networking
@@ -168,7 +171,6 @@ public class TileTank extends TileBC_Neptune implements ITickable, IDebuggable, 
     // IDebuggable
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
         left.add("fluid = " + tank.getDebugString());
         smoothedTank.getDebugInfo(left, right, side);
@@ -259,6 +261,7 @@ public class TileTank extends TileBC_Neptune implements ITickable, IDebuggable, 
         if (gas) {
             Collections.reverse(tanks);
         }
+        resource = resource.copy();
         for (TileTank t : tanks) {
             int tankFilled = t.tank.fill(resource, doFill);
             if (tankFilled > 0) {

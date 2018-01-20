@@ -21,8 +21,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import javax.annotation.Nonnull;
-
 import org.apache.commons.lang3.tuple.Pair;
 
 import net.minecraft.entity.Entity;
@@ -32,17 +30,19 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidUtil;
 
 import buildcraft.api.schematics.ISchematicBlock;
 import buildcraft.api.schematics.ISchematicEntity;
+import buildcraft.api.schematics.SchematicEntityContext;
 
-import buildcraft.lib.misc.BlockUtil;
 import buildcraft.lib.misc.FluidUtilBC;
 import buildcraft.lib.misc.StackUtil;
 import buildcraft.lib.net.PacketBufferBC;
 
 public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> {
     private static final double MAX_ENTITY_DISTANCE = 0.1D;
+    private static final String FLUID_STACK_KEY = "BuilderFluidStack";
 
     private List<ItemStack>[] remainingDisplayRequiredBlocks;
     private List<ItemStack> remainingDisplayRequiredBlocksConcat = Collections.emptyList();
@@ -55,10 +55,14 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
     }
 
     private ISchematicBlock getSchematicBlock(BlockPos blockPos) {
-        BlockPos snapshotPos = getBuildingInfo().fromWorld(blockPos);
-        return getBuildingInfo().box.contains(blockPos) ? getBuildingInfo().rotatedPalette.get(
-            getBuildingInfo().getSnapshot().data[getBuildingInfo().getSnapshot().posToIndex(snapshotPos)]
-        ) : null;
+        return getBuildingInfo().box.contains(blockPos)
+            ?
+            getBuildingInfo().rotatedPalette.get(
+                getBuildingInfo().getSnapshot().data[getBuildingInfo().getSnapshot().posToIndex(
+                    getBuildingInfo().fromWorld(blockPos)
+                )]
+            )
+            : null;
     }
 
     @Override
@@ -67,7 +71,6 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
         return getSchematicBlock(blockPos) == null || getSchematicBlock(blockPos).isAir();
     }
 
-    @Nonnull
     @Override
     protected Blueprint.BuildingInfo getBuildingInfo() {
         return tile.getBlueprintBuildingInfo();
@@ -77,8 +80,7 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
     public void updateSnapshot() {
         super.updateSnapshot();
         // noinspection unchecked
-        remainingDisplayRequiredBlocks = (List<ItemStack>[])
-            new List<?>[getBuildingInfo().box.size().getX() * getBuildingInfo().box.size().getY() * getBuildingInfo().box.size().getZ()];
+        remainingDisplayRequiredBlocks = (List<ItemStack>[]) new List<?>[getBuildingInfo().getSnapshot().getDataSize()];
         Arrays.fill(remainingDisplayRequiredBlocks, Collections.emptyList());
     }
 
@@ -98,8 +100,7 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
         return Stream.concat(
             requiredItems == null ? Stream.empty() : requiredItems.stream(),
             requiredFluids == null ? Stream.empty() : requiredFluids.stream()
-                .map(FluidStack::getFluid)
-                .map(BlockUtil::getBucketFromFluid)
+                .map(FluidUtil::getFilledBucket)
         );
     }
 
@@ -138,13 +139,13 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
                             FluidUtilBC.mergeSameFluids(requiredFluids).stream()
                                 .map(fluidStack -> tile.getTankManager().drain(fluidStack, !simulate))
                                 .map(fluidStack -> {
-                                    ItemStack stack = BlockUtil.getBucketFromFluid(fluidStack.getFluid());
+                                    ItemStack stack = FluidUtil.getFilledBucket(fluidStack);
                                     if (!stack.hasTagCompound()) {
                                         stack.setTagCompound(new NBTTagCompound());
                                     }
                                     // noinspection ConstantConditions
                                     stack.getTagCompound().setTag(
-                                        "BuilderFluidStack",
+                                        FLUID_STACK_KEY,
                                         fluidStack.writeToNBT(new NBTTagCompound())
                                     );
                                     return stack;
@@ -200,12 +201,12 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
         super.cancelPlaceTask(placeTask);
         // noinspection ConstantConditions
         placeTask.items.stream()
-            .filter(stack -> !stack.hasTagCompound() || !stack.getTagCompound().hasKey("BuilderFluidStack"))
+            .filter(stack -> !stack.hasTagCompound() || !stack.getTagCompound().hasKey(FLUID_STACK_KEY))
             .forEach(stack -> tile.getInvResources().insert(stack, false, false));
         // noinspection ConstantConditions
         placeTask.items.stream()
-            .filter(stack -> stack.hasTagCompound() && stack.getTagCompound().hasKey("BuilderFluidStack"))
-            .map(stack -> Pair.of(stack.getCount(), stack.getTagCompound().getCompoundTag("BuilderFluidStack")))
+            .filter(stack -> stack.hasTagCompound() && stack.getTagCompound().hasKey(FLUID_STACK_KEY))
+            .map(stack -> Pair.of(stack.getCount(), stack.getTagCompound().getCompoundTag(FLUID_STACK_KEY)))
             .map(countNbt -> {
                 FluidStack fluidStack = FluidStack.loadFluidStackFromNBT(countNbt.getRight());
                 if (fluidStack != null) {
@@ -249,7 +250,7 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
             .filter(schematicEntity ->
                 entitiesWithinBox.stream()
                     .map(Entity::getPositionVector)
-                    .map(schematicEntity.getPos().add(new Vec3d(getBuildingInfo().basePos))::distanceTo)
+                    .map(schematicEntity.getPos().add(new Vec3d(getBuildingInfo().offsetPos))::distanceTo)
                     .noneMatch(distance -> distance < MAX_ENTITY_DISTANCE)
             )
             .collect(Collectors.toList());
@@ -277,14 +278,14 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
                 entity != null &&
                     getBuildingInfo().entities.stream()
                         .map(ISchematicEntity::getPos)
-                        .map(new Vec3d(getBuildingInfo().basePos)::add)
+                        .map(new Vec3d(getBuildingInfo().offsetPos)::add)
                         .map(entity.getPositionVector()::distanceTo)
                         .noneMatch(distance -> distance < MAX_ENTITY_DISTANCE) &&
-                    SchematicEntityManager.getSchematicEntity(
+                    SchematicEntityManager.getSchematicEntity(new SchematicEntityContext(
                         tile.getWorldBC(),
                         BlockPos.ORIGIN,
                         entity
-                    ) != null
+                    )) != null
             )
             .collect(Collectors.toList());
         if (!toKill.isEmpty()) {
@@ -314,7 +315,7 @@ public class BlueprintBuilder extends SnapshotBuilder<ITileForBlueprintBuilder> 
                             ).isPresent()
                         )
                         .filter(schematicEntity ->
-                            schematicEntity.build(tile.getWorldBC(), getBuildingInfo().basePos) != null
+                            schematicEntity.build(tile.getWorldBC(), getBuildingInfo().offsetPos) != null
                         )
                         .forEach(schematicEntity ->
                             tryExtractRequired(

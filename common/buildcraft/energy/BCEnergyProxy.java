@@ -23,11 +23,12 @@ import buildcraft.energy.client.render.RenderEngineIron;
 import buildcraft.energy.client.render.RenderEngineStone;
 import buildcraft.energy.container.ContainerEngineIron_BC8;
 import buildcraft.energy.container.ContainerEngineStone_BC8;
+import buildcraft.energy.event.ChristmasHandler;
 import buildcraft.energy.tile.TileEngineIron_BC8;
 import buildcraft.energy.tile.TileEngineStone_BC8;
 
 public abstract class BCEnergyProxy implements IGuiHandler {
-    @SidedProxy
+    @SidedProxy(modId = BCEnergy.MODID)
     private static BCEnergyProxy proxy;
 
     public static BCEnergyProxy getProxy() {
@@ -70,13 +71,19 @@ public abstract class BCEnergyProxy implements IGuiHandler {
 
     @SideOnly(Side.SERVER)
     public static class ServerProxy extends BCEnergyProxy {
-
+        @Override
+        public void fmlPreInit() {
+            super.fmlPreInit();
+            ChristmasHandler.fmlPreInitDedicatedServer();
+        }
     }
 
     @SideOnly(Side.CLIENT)
     public static class ClientProxy extends BCEnergyProxy {
         @Override
         public void fmlPreInit() {
+            super.fmlPreInit();
+            ChristmasHandler.fmlPreInitClient();
             BCEnergyModels.fmlPreInit();
             BCEnergySprites.fmlPreInit();
         }

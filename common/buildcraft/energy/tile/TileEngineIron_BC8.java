@@ -18,7 +18,6 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.MathHelper;
 
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
@@ -105,17 +104,6 @@ public class TileEngineIron_BC8 extends TileEngineBase_BC8 {
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
-        // TODO: remove in next version
-        NBTTagCompound tanksTag = nbt.getCompoundTag("tanks");
-        if (tanksTag.hasKey("tankFuel")) {
-            tanksTag.setTag("fuel", tanksTag.getTag("tankFuel"));
-        }
-        if (tanksTag.hasKey("tankCoolant")) {
-            tanksTag.setTag("coolant", tanksTag.getTag("tankCoolant"));
-        }
-        if (tanksTag.hasKey("tankResidue")) {
-            tanksTag.setTag("residue", tanksTag.getTag("tankResidue"));
-        }
         super.readFromNBT(nbt);
         penaltyCooling = nbt.getInteger("penaltyCooling");
         burnTime = nbt.getDouble("burnTime");
@@ -146,18 +134,16 @@ public class TileEngineIron_BC8 extends TileEngineBase_BC8 {
     @Override
     public boolean onActivated(EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY,
         float hitZ) {
-        ItemStack current = player.getHeldItem(hand);
+        ItemStack current = player.getHeldItem(hand).copy();
+        if (super.onActivated(player, hand, side, hitX, hitY, hitZ)) {
+            return true;
+        }
         if (!current.isEmpty()) {
             if (EntityUtil.getWrenchHand(player) != null) {
                 return false;
             }
             if (current.getItem() instanceof IItemPipe) {
                 return false;
-            }
-            if (!world.isRemote) {
-                if (FluidUtil.interactWithFluidHandler(player, hand, world, pos, side)) {
-                    return true;
-                }
             }
         }
         if (!world.isRemote) {
@@ -214,26 +200,36 @@ public class TileEngineIron_BC8 extends TileEngineBase_BC8 {
                         burnTime--;
                     }
                     if (burnTime <= 0) {
-                        if (--fuel.amount <= 0) {
-                            tankFuel.setFluid(null);
-                        }
-                        burnTime += currentFuel.getTotalBurningTime() / 1000.0;
+                        if (fuel.amount > 0) {
+                            fuel.amount--;
+                            burnTime += currentFuel.getTotalBurningTime() / 1000.0;
 
-                        // If we also produce residue then put it out too
-                        if (currentFuel instanceof IDirtyFuel) {
-                            IDirtyFuel dirtyFuel = (IDirtyFuel) currentFuel;
-                            residueAmount += dirtyFuel.getResidue().amount / 1000.0;
-                            if (residueAmount >= 1) {
-                                int residue = MathHelper.floor(residueAmount);
+                            // If we also produce residue then put it out too
+                            if (currentFuel instanceof IDirtyFuel) {
+                                IDirtyFuel dirtyFuel = (IDirtyFuel) currentFuel;
                                 FluidStack residueFluid = dirtyFuel.getResidue().copy();
-                                residueFluid.amount = residue;
-                                residueAmount -= tankResidue.fill(residueFluid, true);
+                                residueAmount += residueFluid.amount / 1000.0;
+                                if (residueAmount >= 1) {
+                                    residueFluid.amount = MathHelper.floor(residueAmount);
+                                    residueAmount -= tankResidue.fill(residueFluid, true);
+                                } else if (tankResidue.getFluid() == null) {
+                                    residueFluid.amount = 0;
+                                    tankResidue.setFluid(residueFluid);
+                                }
                             }
+                        } else {
+                            tankFuel.setFluid(null);
+                            currentFuel = null;
+                            currentOutput = 0;
+                            return;
                         }
                     }
                     currentOutput = currentFuel.getPowerPerCycle(); // Comment out for constant power
                     addPower(currentFuel.getPowerPerCycle());
                     heat += currentFuel.getPowerPerCycle() * HEAT_PER_MJ / MjAPI.MJ;// * getBiomeTempScalar();
+                } else {
+                    // Burn time == 0 AND fuel.amount == 0
+                    tankFuel.setFluid(null);
                 }
             } else if (lastPowered) {
                 lastPowered = false;
@@ -357,9 +353,9 @@ public class TileEngineIron_BC8 extends TileEngineBase_BC8 {
     }
 
     private class InternalFluidHandler implements IFluidHandlerAdv {
-        private final IFluidTankProperties[] properties = {//
-            new TankProperties(tankFuel, true, false),//
-            new TankProperties(tankCoolant, true, false),//
+        private final IFluidTankProperties[] properties = { //
+            new TankProperties(tankFuel, true, false), //
+            new TankProperties(tankCoolant, true, false), //
             new TankProperties(tankResidue, false, true),//
         };
 

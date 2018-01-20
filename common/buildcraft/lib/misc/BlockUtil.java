@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -36,14 +37,10 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.ChunkCache;
 import net.minecraft.world.Explosion;
-import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-import net.minecraft.world.chunk.Chunk;
 
-import net.minecraftforge.common.ForgeModContainer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.ForgeEventFactory;
@@ -55,7 +52,6 @@ import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fluids.IFluidBlock;
-import net.minecraftforge.fluids.UniversalBucket;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 
@@ -67,6 +63,11 @@ import buildcraft.lib.compat.CompatManager;
 import buildcraft.lib.world.SingleBlockAccess;
 
 public final class BlockUtil {
+
+    /**
+     * @return A list of itemstacks that are dropped from the block, or null if the block is air
+     */
+    @Nullable
     public static NonNullList<ItemStack> getItemStackFromBlock(WorldServer world, BlockPos pos, GameProfile owner) {
         IBlockState state = world.getBlockState(pos);
         Block block = state.getBlock();
@@ -74,7 +75,8 @@ public final class BlockUtil {
             return null;
         }
 
-        List<ItemStack> dropsList = block.getDrops(world, pos, state, 0);
+        NonNullList<ItemStack> dropsList = NonNullList.create();
+        block.getDrops(dropsList, world, pos, state, 0);
         EntityPlayer fakePlayer = BuildCraftAPI.fakePlayerProvider.getFakePlayer(world, owner, pos);
         float dropChance = ForgeEventFactory.fireBlockHarvesting(dropsList, world, pos, state, 0, 1.0F, false, fakePlayer);
 
@@ -266,25 +268,23 @@ public final class BlockUtil {
     }
 
     public static Fluid getFluidWithoutFlowing(IBlockState state) {
-        if (state.getBlock() instanceof BlockFluidClassic) {
-            if (((BlockFluidClassic) state.getBlock()).isSourceBlock(
-                new SingleBlockAccess(state),
-                SingleBlockAccess.POS
-            )) {
-                return getFluid(state.getBlock());
+        Block block = state.getBlock();
+        if (block instanceof BlockFluidClassic) {
+            if (((BlockFluidClassic) block).isSourceBlock(new SingleBlockAccess(state), SingleBlockAccess.POS)) {
+                return getFluid(block);
             }
         }
-        if (state.getBlock() == Blocks.WATER) {
-            return FluidRegistry.WATER;
-        }
-        if (state.getBlock() == Blocks.FLOWING_WATER && state.getValue(BlockLiquid.LEVEL) == 0) {
-            return FluidRegistry.WATER;
-        }
-        if (state.getBlock() == Blocks.LAVA) {
-            return FluidRegistry.LAVA;
-        }
-        if (state.getBlock() == Blocks.FLOWING_LAVA && state.getValue(BlockLiquid.LEVEL) == 0) {
-            return FluidRegistry.LAVA;
+        if (block instanceof BlockLiquid) {
+            if (state.getValue(BlockLiquid.LEVEL) != 0) {
+                return null;
+            }
+            if (block == Blocks.WATER || block == Blocks.FLOWING_WATER) {
+                return FluidRegistry.WATER;
+            }
+            if (block == Blocks.LAVA || block == Blocks.FLOWING_LAVA) {
+                return FluidRegistry.LAVA;
+            }
+            return FluidRegistry.lookupFluidForBlock(block);
         }
         return null;
     }
@@ -299,10 +299,6 @@ public final class BlockUtil {
             fluid = ((BlockFluidBase) block).getFluid();
         }
         return fluid;
-    }
-
-    public static ItemStack getBucketFromFluid(Fluid fluid) {
-        return UniversalBucket.getFilledBucket(ForgeModContainer.getInstance().universalBucket, fluid);
     }
 
     public static FluidStack drainBlock(World world, BlockPos pos, boolean doDrain) {
@@ -470,12 +466,6 @@ public final class BlockUtil {
         return a.getBlock() == b.getBlock() &&
                 Sets.intersection(new HashSet<>(a.getPropertyKeys()), new HashSet<>(b.getPropertyKeys())).stream()
                 .allMatch(property -> Objects.equals(a.getValue(property), b.getValue(property)));
-    }
-
-    public static TileEntity getTileEntityForGetActualState(IBlockAccess world, BlockPos pos) {
-        return world instanceof ChunkCache
-                ? ((ChunkCache) world).getTileEntity(pos, Chunk.EnumCreateEntityType.CHECK)
-                : world.getTileEntity(pos);
     }
 
     public static Comparator<BlockPos> uniqueBlockPosComparator(Comparator<BlockPos> parent) {

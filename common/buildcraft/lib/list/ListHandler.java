@@ -20,8 +20,11 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.NonNullList;
 
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import buildcraft.api.lists.ListMatchHandler;
+import buildcraft.api.lists.ListMatchHandler.Type;
 import buildcraft.api.lists.ListRegistry;
 
 import buildcraft.lib.misc.NBTUtilBC;
@@ -82,15 +85,24 @@ public final class ListHandler {
 
         public boolean matches(@Nonnull ItemStack target) {
             if (byType || byMaterial) {
-                if (stacks.get(0).isEmpty()) {
+                ItemStack compare = stacks.get(0);
+                if (compare.isEmpty()) {
                     return false;
                 }
 
                 List<ListMatchHandler> handlers = ListRegistry.getHandlers();
                 ListMatchHandler.Type type = getSortingType();
+                boolean anyHandled = false;
                 for (ListMatchHandler h : handlers) {
-                    if (h.matches(type, stacks.get(0), target, precise)) {
+                    if (h.matches(type, compare, target, precise)) {
                         return true;
+                    } else if (h.isValidSource(type, target)) {
+                        anyHandled = true;
+                    }
+                }
+                if (!anyHandled) {
+                    if (type == Type.TYPE && target.getHasSubtypes()) {
+                        return StackUtil.isMatchingItem(compare, target, false, false);
                     }
                 }
             } else {
@@ -107,7 +119,8 @@ public final class ListHandler {
         }
 
         public ListMatchHandler.Type getSortingType() {
-            return byType ? (byMaterial ? ListMatchHandler.Type.CLASS : ListMatchHandler.Type.TYPE) : ListMatchHandler.Type.MATERIAL;
+            return byType ? (byMaterial ? ListMatchHandler.Type.CLASS : ListMatchHandler.Type.TYPE)
+                : ListMatchHandler.Type.MATERIAL;
         }
 
         public static Line fromNBT(NBTTagCompound data) {
@@ -165,6 +178,7 @@ public final class ListHandler {
             }
         }
 
+        @SideOnly(Side.CLIENT)
         public NonNullList<ItemStack> getExamples() {
             ItemStack firstStack = stacks.get(0);
             if (firstStack.isEmpty()) {
@@ -187,7 +201,7 @@ public final class ListHandler {
             if (handlersCustom.size() > 0) {
                 for (Item i : ForgeRegistries.ITEMS) {
                     NonNullList<ItemStack> examples = NonNullList.create();
-                    i.getSubItems(i, CreativeTabs.MISC, examples);
+                    i.getSubItems(CreativeTabs.MISC, examples);
                     for (ItemStack s : examples) {
                         for (ListMatchHandler mh : handlersCustom) {
                             if (mh.matches(type, firstStack, s, false)) {

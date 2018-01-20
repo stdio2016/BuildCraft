@@ -8,6 +8,7 @@ import java.io.File;
 import java.util.function.Consumer;
 
 import net.minecraft.init.Blocks;
+import net.minecraft.item.Item;
 
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
@@ -15,29 +16,26 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
-import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.oredict.OreDictionary;
 
 import buildcraft.lib.BCLib;
 import buildcraft.lib.BCLibItems;
 import buildcraft.lib.marker.MarkerCache;
-import buildcraft.lib.net.MessageManager;
 import buildcraft.lib.registry.CreativeTabManager;
 import buildcraft.lib.registry.CreativeTabManager.CreativeTabBC;
 import buildcraft.lib.registry.TagManager;
 import buildcraft.lib.registry.TagManager.EnumTagType;
 import buildcraft.lib.registry.TagManager.TagEntry;
 
-import buildcraft.core.list.ListTooltipHandler;
 import buildcraft.core.marker.PathCache;
 import buildcraft.core.marker.VolumeCache;
-import buildcraft.core.marker.volume.MessageVolumeBoxes;
 
 //@formatter:off
 @Mod(
     modid = BCCore.MODID,
     name = "BuildCraft Core",
     version = BCLib.VERSION,
+    updateJSON = "https://mod-buildcraft.com/version/versions.json",
     dependencies = "required-after:buildcraftlib@[" + BCLib.VERSION + "]",
     guiFactory = "buildcraft.core.client.ConfigGuiFactoryBC"
 )
@@ -61,30 +59,35 @@ public class BCCore {
 
         CreativeTabBC tab = CreativeTabManager.createTab("buildcraft.main");
 
-        BCCoreItems.preInit();
         BCCoreBlocks.preInit();
+        BCCoreItems.preInit();
         BCCoreStatements.preInit();
 
         BCCoreProxy.getProxy().fmlPreInit();
 
         tab.setItem(BCCoreItems.wrench);
 
+        setItemTab(BCLibItems.guide, tab);
+        setItemTab(BCLibItems.guideNote, tab);
+        setItemTab(BCLibItems.debugger, tab);
+
         NetworkRegistry.INSTANCE.registerGuiHandler(INSTANCE, BCCoreProxy.getProxy());
 
-        MinecraftForge.EVENT_BUS.register(ListTooltipHandler.INSTANCE);
-
         OreDictionary.registerOre("craftingTableWood", Blocks.CRAFTING_TABLE);
-
         MinecraftForge.EVENT_BUS.register(BCCoreEventDist.INSTANCE);
-        MessageManager.addMessageType(MessageVolumeBoxes.class, MessageVolumeBoxes.HANDLER, Side.CLIENT);
+    }
+
+    private static void setItemTab(Item item, CreativeTabBC tab) {
+        if (item != null) {
+            item.setCreativeTab(tab);
+        }
     }
 
     @Mod.EventHandler
     public static void init(FMLInitializationEvent event) {
-        BCCoreProxy.getProxy().fmlInit();
+        BCLibItems.guide.setCreativeTab(CreativeTabManager.getTab("buildcraft.main"));
 
-        BCCoreRecipes.init();
-        BCAchievements.init();
+        BCCoreProxy.getProxy().fmlInit();
 
         MarkerCache.registerCache(VolumeCache.INSTANCE);
         MarkerCache.registerCache(PathCache.INSTANCE);
@@ -112,10 +115,12 @@ public class BCCore {
         registerTag("item.marker_connector").reg("marker_connector").locale("markerConnector").model("marker_connector");
         registerTag("item.volume_box").reg("volume_box").locale("volume_box").model("volume_box");
         registerTag("item.goggles").reg("goggles").locale("goggles").model("goggles");
+        registerTag("item.fragile_fluid_shard").reg("fragile_fluid_shard").locale("fragile_fluid_shard").model("fragile_fluid_shard");
         // Item Blocks
         registerTag("item.block.marker.volume").reg("marker_volume").locale("markerBlock").oldReg("markerBlock").model("marker_volume");
         registerTag("item.block.marker.path").reg("marker_path").locale("pathMarkerBlock").oldReg("pathMarkerBlock").model("marker_path");
         registerTag("item.block.spring").reg("spring").locale("spring").model("spring");
+        registerTag("item.block.power_tester").reg("power_tester").locale("power_tester").model("power_tester");
         registerTag("item.block.decorated").reg("decorated").locale("decorated").model("decorated/");
         TagEntry engine = registerTag("item.block.engine.bc").reg("engine").locale("engineBlock");
         // Blocks
@@ -128,11 +133,13 @@ public class BCCore {
         registerTag("block.engine.bc.creative").locale("engineCreative");
         registerTag("block.marker.volume").reg("marker_volume").locale("markerBlock").oldReg("markerBlock").model("marker_volume");
         registerTag("block.marker.path").reg("marker_path").locale("pathMarkerBlock").oldReg("pathMarkerBlock").model("marker_path");
+        registerTag("block.power_tester").reg("power_tester").locale("power_tester").oldReg("power_tester").model("power_tester");
         // Tiles
         registerTag("tile.marker.volume").reg("marker.volume").oldReg("buildcraft.builders.Marker", "Marker");
         registerTag("tile.marker.path").reg("marker.path");
         registerTag("tile.engine.wood").reg("engine.wood");
         registerTag("tile.engine.creative").reg("engine.creative");
+        registerTag("tile.power_tester").reg("power_tester");
 
         endBatch(TagManager.prependTags("buildcraftcore:", EnumTagType.REGISTRY_NAME, EnumTagType.MODEL_LOCATION).andThen(TagManager.setTab("buildcraft.main")));
         engine.model("");// Clear model so that subtypes can set it properly

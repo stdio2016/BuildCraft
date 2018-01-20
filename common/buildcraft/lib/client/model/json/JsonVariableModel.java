@@ -13,9 +13,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -24,37 +24,41 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSyntaxException;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.util.JsonUtils;
 import net.minecraft.util.ResourceLocation;
 
+import buildcraft.api.core.BCLog;
+
+import buildcraft.lib.client.model.ModelHolderRegistry;
 import buildcraft.lib.client.model.ModelUtil;
+import buildcraft.lib.client.model.ModelUtil.TexturedFace;
+import buildcraft.lib.client.model.MutableQuad;
 import buildcraft.lib.client.model.ResourceLoaderContext;
+import buildcraft.lib.client.reload.ReloadManager;
+import buildcraft.lib.client.reload.ReloadSource;
+import buildcraft.lib.client.reload.SourceType;
 import buildcraft.lib.expression.FunctionContext;
-import buildcraft.lib.expression.InternalCompiler;
-import buildcraft.lib.expression.api.IExpressionNode;
-import buildcraft.lib.expression.api.InvalidExpressionException;
-import buildcraft.lib.expression.api.NodeType;
-import buildcraft.lib.expression.node.value.ITickableNode;
-import buildcraft.lib.expression.node.value.NodeStateful;
-import buildcraft.lib.expression.node.value.NodeStateful.IGetterFunc;
-import buildcraft.lib.expression.node.value.NodeUpdatable;
+import buildcraft.lib.json.JsonVariableObject;
 import buildcraft.lib.misc.JsonUtil;
+import buildcraft.lib.misc.SpriteUtil;
 
 /** {@link JsonModel} but any element can change depending on variables. */
-public class JsonVariableModel {
+public class JsonVariableModel extends JsonVariableObject {
     // Never allow ao or textures to be variable - they need to be hardcoded so that we can stitch them
     public final boolean ambientOcclusion;
     public final Map<String, JsonTexture> textures;
-    public final Map<String, ITickableNode.Source> variables;
     public final JsonModelRule[] rules;
-    private final ITickableNode.Source[] variablesArray;
     public final JsonVariableModelPart[] cutoutElements, translucentElements;
 
-    public static JsonVariableModel deserialize(ResourceLocation from, FunctionContext fnCtx) throws JsonParseException, IOException {
+    public static JsonVariableModel deserialize(ResourceLocation from, FunctionContext fnCtx)
+        throws JsonParseException, IOException {
         return deserialize(from, fnCtx, new ResourceLoaderContext());
     }
 
-    public static JsonVariableModel deserialize(ResourceLocation from, FunctionContext fnCtx, ResourceLoaderContext ctx) throws JsonParseException, IOException {
+    public static JsonVariableModel deserialize(ResourceLocation from, FunctionContext fnCtx, ResourceLoaderContext ctx)
+        throws JsonParseException, IOException {
         try (InputStreamReader isr = ctx.startLoading(from)) {
             return new JsonVariableModel(JsonUtil.inlineCustom(new Gson().fromJson(isr, JsonObject.class)), fnCtx, ctx);
         } finally {
@@ -62,7 +66,8 @@ public class JsonVariableModel {
         }
     }
 
-    private static JsonVariableModelPart[] deserializePartArray(JsonObject json, String member, FunctionContext fnCtx, ResourceLoaderContext ctx, boolean require) {
+    static JsonVariableModelPart[] deserializePartArray(JsonObject json, String member, FunctionContext fnCtx,
+        ResourceLoaderContext ctx, boolean require) {
         if (!json.has(member)) {
             if (require) {
                 throw new JsonSyntaxException("Did not have '" + member + "' in '" + json + "'");
@@ -82,7 +87,8 @@ public class JsonVariableModel {
         return to;
     }
 
-    public JsonVariableModel(JsonObject obj, FunctionContext fnCtx, ResourceLoaderContext ctx) throws JsonParseException {
+    public JsonVariableModel(JsonObject obj, FunctionContext fnCtx, ResourceLoaderContext ctx)
+        throws JsonParseException {
         boolean ambf = false;
         textures = new HashMap<>();
         variables = new LinkedHashMap<>();
@@ -127,7 +133,7 @@ public class JsonVariableModel {
             fnCtx = new FunctionContext(fnCtx);
             putVariables(JsonUtils.getJsonObject(obj, "variables"), fnCtx);
         }
-        variablesArray = variables.values().toArray(new ITickableNode.Source[0]);
+        finaliseVariables();
 
         boolean require = cutout.isEmpty() && translucent.isEmpty();
         if (obj.has("elements")) {
@@ -148,6 +154,39 @@ public class JsonVariableModel {
             }
         }
         rules = rulesP.toArray(new JsonModelRule[rulesP.size()]);
+    }
+
+    /** Creates a half copy of this -- textures are fully copied, but everything else is taken dierctly (as its
+     * effectivly immutable) */
+    public JsonVariableModel(JsonVariableModel from) {
+        textures = new HashMap<>(from.textures);
+        cutoutElements = from.cutoutElements;
+        translucentElements = from.translucentElements;
+        rules = from.rules;
+        ambientOcclusion = from.ambientOcclusion;
+    }
+
+    public void onTextureStitchPre(ResourceLocation modelLocation, Set<ResourceLocation> toRegisterSprites) {
+        if (ModelHolderRegistry.DEBUG) {
+            BCLog.logger.info("[lib.model] The model " + modelLocation + " requires these sprites:");
+        }
+        ReloadSource srcModel = new ReloadSource(modelLocation, SourceType.MODEL);
+        for (Entry<String, JsonTexture> entry : textures.entrySet()) {
+            JsonTexture lookup = entry.getValue();
+            String location = lookup.location;
+            if (location.startsWith("#") || location.startsWith("~")) {
+                // its somewhere else in the map so we don't need to register it twice
+                continue;
+            }
+            ResourceLocation textureLoc = new ResourceLocation(location);
+            toRegisterSprites.add(textureLoc);
+            // Allow transitive deps
+            ReloadSource srcSprite = new ReloadSource(SpriteUtil.transformLocation(textureLoc), SourceType.SPRITE);
+            ReloadManager.INSTANCE.addDependency(srcSprite, srcModel);
+            if (ModelHolderRegistry.DEBUG) {
+                BCLog.logger.info("[lib.model]  - " + location);
+            }
+        }
     }
 
     private void deserializeTextures(JsonElement elem) {
@@ -172,108 +211,43 @@ public class JsonVariableModel {
         }
     }
 
-    private void putVariables(JsonObject values, FunctionContext fnCtx) {
-        for (Entry<String, JsonElement> entry : values.entrySet()) {
-            String name = entry.getKey();
-            name = name.toLowerCase(Locale.ROOT);
-            if (fnCtx.hasLocalVariable(name)) {
-                throw new JsonSyntaxException("Duplicate local variable '" + name + "'");
-            } else if (fnCtx.getVariable(name) != null) {
-                // Allow overriding of higher up variables
-                // ...what? Doesn't this disallow overriding existing variables?
-                continue;
-            }
-            JsonElement value = entry.getValue();
-            String type = null, getter = null, rounder = null;
-
-            if (value.isJsonObject()) {
-                JsonObject objValue = value.getAsJsonObject();
-                value = objValue.get("value");
-                type = JsonUtils.getString(objValue, "type");
-                getter = JsonUtils.getString(objValue, "getter");
-                if (objValue.has("rounder")) {
-                    rounder = JsonUtils.getString(objValue, "rounder");
-                }
-            }
-
-            if (!value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
-                throw new JsonSyntaxException("Expected a string, got " + value + " for the variable '" + name + "'");
-            }
-            NodeStateful stateful = null;
-            if (getter != null) {
-                // stateful node
-                NodeType nodeType;
-                try {
-                    nodeType = NodeType.parseType(type);
-                } catch (InvalidExpressionException iee) {
-                    throw new JsonSyntaxException("Could not parse node type for variable '" + name + "'", iee);
-                }
-                IGetterFunc getterFunc = parseGetterFunction(getter, fnCtx);
-                try {
-                    stateful = new NodeStateful(name, nodeType, getterFunc);
-                } catch (InvalidExpressionException iee) {
-                    throw new JsonSyntaxException("Could not create a getter for the variable '" + name + "'", iee);
-                }
-                fnCtx.putVariable(name, stateful.getter);
-                if (rounder != null) {
-                    FunctionContext fnCtx2 = new FunctionContext(fnCtx);
-                    fnCtx2.putVariable("last", stateful.last);
-                    fnCtx2.putVariable("var", stateful.variable);
-                    fnCtx2.putVariable("value", stateful.rounderValue);
-                    try {
-                        IExpressionNode nodeRounder = InternalCompiler.compileExpression(rounder, fnCtx2);
-                        stateful.setRounder(nodeRounder);
-                    } catch (InvalidExpressionException iee) {
-                        throw new JsonSyntaxException("Could not compile a rounder for the variable '" + name + "'", iee);
-                    }
-                }
-            }
-
-            String expression = value.getAsString();
-            IExpressionNode node;
-            try {
-                node = InternalCompiler.compileExpression(expression, fnCtx);
-            } catch (InvalidExpressionException e) {
-                throw new JsonSyntaxException("Invalid expression " + expression, e);
-            }
-            if (variables.containsKey(name)) {
-                ITickableNode.Source existing = variables.get(name);
-                existing.setSource(node);
-            } else if (stateful != null) {
-                stateful.setSource(node);
-                variables.put(name, stateful);
-            } else {
-                NodeUpdatable nodeUpdatable = new NodeUpdatable(name, node);
-                variables.put(name, nodeUpdatable);
-                fnCtx.putVariable(name, nodeUpdatable.variable);
-            }
+    private TexturedFace lookupTexture(String lookup) {
+        int attempts = 0;
+        JsonTexture texture = new JsonTexture(lookup);
+        TextureAtlasSprite sprite;
+        while (texture.location.startsWith("#") && attempts < 10) {
+            JsonTexture tex = textures.get(texture.location);
+            if (tex == null) break;
+            else texture = texture.inParent(tex);
+            attempts++;
         }
+        lookup = texture.location;
+        sprite = Minecraft.getMinecraft().getTextureMapBlocks().getAtlasSprite(lookup);
+        TexturedFace face = new TexturedFace();
+        face.sprite = sprite;
+        face.faceData = texture.faceData;
+        return face;
     }
 
-    private static IGetterFunc parseGetterFunction(String getter, FunctionContext fnCtx) {
-        if ("interpolate_partial_ticks".equalsIgnoreCase(getter)) {
-            return NodeStateful.GetterType.INTERPOLATE_PARTIAL_TICKS;
+    public MutableQuad[] bakePart(JsonVariableModelPart[] a, ITextureGetter spriteLookup) {
+        List<MutableQuad> list = new ArrayList<>();
+        for (JsonVariableModelPart part : a) {
+            part.addQuads(list, spriteLookup);
         }
-        if ("last".equalsIgnoreCase(getter)) {
-            return NodeStateful.GetterType.USE_LAST;
+        for (JsonModelRule rule : rules) {
+            if (rule.when.evaluate()) {
+                rule.apply(list);
+            }
         }
-        if ("var".equalsIgnoreCase(getter)) {
-            return NodeStateful.GetterType.USE_VAR;
-        }
-        return (var, last) -> {
-            FunctionContext fnCtx2 = new FunctionContext(fnCtx);
-            fnCtx2.putVariable("var", var);
-            fnCtx2.putVariable("last", last);
-            return InternalCompiler.compileExpression(getter, fnCtx2);
-        };
+        return list.toArray(new MutableQuad[list.size()]);
     }
 
-    public ITickableNode[] createTickableNodes() {
-        ITickableNode[] nodes = new ITickableNode[variablesArray.length];
-        for (int i = 0; i < nodes.length; i++) {
-            nodes[i] = variablesArray[i].createTickable();
-        }
-        return nodes;
+    public MutableQuad[] getCutoutQuads() {
+        return bakePart(cutoutElements, this::lookupTexture);
+    }
+
+    public MutableQuad[] getTranslucentQuads() {
+        return bakePart(translucentElements, this::lookupTexture);
     }
 
     public interface ITextureGetter {

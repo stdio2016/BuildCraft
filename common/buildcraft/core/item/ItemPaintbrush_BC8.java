@@ -9,11 +9,11 @@ import javax.annotation.Nonnull;
 import gnu.trove.map.hash.TIntObjectHashMap;
 
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.EnumDyeColor;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumActionResult;
@@ -29,6 +29,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 
 import buildcraft.api.blocks.CustomPaintHelper;
 
+import buildcraft.lib.client.render.font.SpecialColourFontRenderer;
 import buildcraft.lib.item.ItemBC_Neptune;
 import buildcraft.lib.misc.ColourUtil;
 import buildcraft.lib.misc.ParticleUtil;
@@ -47,9 +48,9 @@ public class ItemPaintbrush_BC8 extends ItemBC_Neptune {
     }
 
     @Override
-    public void getSubItems(Item item, CreativeTabs tab, NonNullList<ItemStack> subItems) {
+    protected void addSubItems(CreativeTabs tab, NonNullList<ItemStack> subItems) {
         for (int i = 0; i < 17; i++) {
-            subItems.add(new ItemStack(item, 1, i));
+            subItems.add(new ItemStack(this, 1, i));
         }
     }
 
@@ -64,10 +65,10 @@ public class ItemPaintbrush_BC8 extends ItemBC_Neptune {
 
     @Override
     public EnumActionResult onItemUse(EntityPlayer player, World world, BlockPos pos, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
-        ItemStack stack = StackUtil.asNonNull( player.getHeldItem(hand));
+        ItemStack stack = StackUtil.asNonNull(player.getHeldItem(hand));
         Brush brush = new Brush(stack);
         Vec3d hitPos = VecUtil.add(new Vec3d(hitX, hitY, hitZ), pos);
-        if (brush.useOnBlock(world, pos, world.getBlockState(pos), hitPos, facing)) {
+        if (brush.useOnBlock(world, pos, world.getBlockState(pos), hitPos, facing, player)) {
             ItemStack newStack = brush.save(stack);
             if (!newStack.isEmpty()) {
                 player.setHeldItem(hand, newStack);
@@ -88,9 +89,15 @@ public class ItemPaintbrush_BC8 extends ItemBC_Neptune {
         Brush brush = getBrushFromStack(stack);
         String colourComponent = "";
         if (brush.colour != null) {
-            colourComponent = ColourUtil.getTextFullTooltip(brush.colour) + " ";
+            colourComponent = ColourUtil.getTextFullTooltipSpecial(brush.colour) + " ";
         }
         return colourComponent + super.getItemStackDisplayName(stack);
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    public FontRenderer getFontRenderer(ItemStack stack) {
+        return SpecialColourFontRenderer.INSTANCE;
     }
 
     @Override
@@ -177,7 +184,7 @@ public class ItemPaintbrush_BC8 extends ItemBC_Neptune {
             return (usesLeft <= 0 || colour == null) ? 0 : colour.getMetadata() + 1;
         }
 
-        public boolean useOnBlock(World world, BlockPos pos, IBlockState state, Vec3d hitPos, EnumFacing side) {
+        public boolean useOnBlock(World world, BlockPos pos, IBlockState state, Vec3d hitPos, EnumFacing side, EntityPlayer player) {
             if (colour != null && usesLeft <= 0) {
                 return false;
             }
@@ -187,7 +194,11 @@ public class ItemPaintbrush_BC8 extends ItemBC_Neptune {
             if (result == EnumActionResult.SUCCESS) {
                 ParticleUtil.showChangeColour(world, hitPos, colour);
                 SoundUtil.playChangeColour(world, pos, colour);
-                usesLeft--;
+
+                if (!player.isCreative()) {
+                    usesLeft--;
+                }
+
                 if (usesLeft <= 0) {
                     colour = null;
                     usesLeft = 0;

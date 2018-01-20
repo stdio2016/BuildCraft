@@ -53,6 +53,9 @@ public class GuidePageContents extends GuidePageBase {
         TypeOrder order = GuiGuide.SORTING_TYPES[gui.sortingOrderIndex];
 
         for (PageEntry entry : GuideManager.INSTANCE.getAllEntries()) {
+            if (GuideManager.INSTANCE.getFactoryFor(entry) == null) {
+                continue;
+            }
             String[] ordered = entry.typeTags.getOrdered(order);
 
             NodePageLine node = parentNode;
@@ -78,7 +81,7 @@ public class GuidePageContents extends GuidePageBase {
             String translatedTitle = I18n.format(entry.title);
             ItemStack stack = entry.getItemStack();
             ISimpleDrawable icon = null;
-            if (stack != null) {
+            if (!stack.isEmpty()) {
                 icon = new GuiStack(stack);
             }
             PageLine line = new PageLine(icon, icon, indent, translatedTitle, true);

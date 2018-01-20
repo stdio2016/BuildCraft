@@ -9,12 +9,12 @@ package buildcraft.factory.client.render;
 import org.lwjgl.opengl.GL11;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.GlStateManager.DestFactor;
 import net.minecraft.client.renderer.GlStateManager.SourceFactor;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.VertexBuffer;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
@@ -28,7 +28,6 @@ import net.minecraftforge.fluids.FluidStack;
 import buildcraft.lib.client.render.fluid.FluidRenderer;
 import buildcraft.lib.client.render.fluid.FluidSpriteType;
 import buildcraft.lib.fluid.FluidSmoother.FluidStackInterp;
-import buildcraft.lib.fluid.Tank;
 
 import buildcraft.factory.tile.TileTank;
 
@@ -41,7 +40,7 @@ public class RenderTank extends TileEntitySpecialRenderer<TileTank> {
     public RenderTank() {}
 
     @Override
-    public void renderTileEntityAt(TileTank tile, double x, double y, double z, float partialTicks, int destroyStage) {
+    public void render(TileTank tile, double x, double y, double z, float partialTicks, int destroyStage, float alpha) {
         FluidStackInterp forRender = tile.getFluidForRender(partialTicks);
         if (forRender == null) {
             return;
@@ -56,13 +55,13 @@ public class RenderTank extends TileEntitySpecialRenderer<TileTank> {
         GlStateManager.blendFunc(SourceFactor.SRC_ALPHA, DestFactor.ONE_MINUS_SRC_ALPHA);
 
         // buffer setup
-        VertexBuffer vb = Tessellator.getInstance().getBuffer();
-        vb.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK);
-        vb.setTranslation(x, y, z);
+        BufferBuilder bb = Tessellator.getInstance().getBuffer();
+        bb.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK);
+        bb.setTranslation(x, y, z);
 
         boolean[] sideRender = { true, true, true, true, true, true };
-        boolean connectedUp = isFullyConnected(tile, EnumFacing.UP);
-        boolean connectedDown = isFullyConnected(tile, EnumFacing.DOWN);
+        boolean connectedUp = isFullyConnected(tile, EnumFacing.UP, partialTicks);
+        boolean connectedDown = isFullyConnected(tile, EnumFacing.DOWN, partialTicks);
         sideRender[EnumFacing.DOWN.ordinal()] = !connectedDown;
         sideRender[EnumFacing.UP.ordinal()] = !connectedUp;
 
@@ -74,10 +73,10 @@ public class RenderTank extends TileEntitySpecialRenderer<TileTank> {
 
         FluidRenderer.vertex.lighti(combinedLight);
 
-        FluidRenderer.renderFluid(FluidSpriteType.STILL, fluid, forRender.amount, tile.tank.getCapacity(), min, max, vb, sideRender);
+        FluidRenderer.renderFluid(FluidSpriteType.STILL, fluid, forRender.amount, tile.tank.getCapacity(), min, max, bb, sideRender);
 
         // buffer finish
-        vb.setTranslation(0, 0, 0);
+        bb.setTranslation(0, 0, 0);
         Tessellator.getInstance().draw();
 
         // gl state finish
@@ -87,22 +86,26 @@ public class RenderTank extends TileEntitySpecialRenderer<TileTank> {
         Minecraft.getMinecraft().mcProfiler.endSection();
     }
 
-    private static boolean isFullyConnected(TileTank thisTank, EnumFacing face) {
+    private static boolean isFullyConnected(TileTank thisTank, EnumFacing face, float partialTicks) {
         BlockPos pos = thisTank.getPos().offset(face);
         TileEntity oTile = thisTank.getWorld().getTileEntity(pos);
         if (oTile instanceof TileTank) {
             TileTank oTank = (TileTank) oTile;
-            Tank t = oTank.tank;
-            FluidStack fluid = t.getFluid();
-            if (t.getFluidAmount() <= 0 || fluid == null) {
+            FluidStackInterp forRender = oTank.getFluidForRender(partialTicks);
+            if (forRender == null) {
                 return false;
-            } else if (!fluid.isFluidEqual(thisTank.tank.getFluid())) {
+            }
+            FluidStack fluid = forRender.fluid;
+            if (fluid == null || forRender.amount <= 0) {
+                return false;
+            } else if (thisTank.getFluidForRender(partialTicks) == null ||
+                !fluid.isFluidEqual(thisTank.getFluidForRender(partialTicks).fluid)) {
                 return false;
             }
             if (fluid.getFluid().isGaseous(fluid)) {
                 face = face.getOpposite();
             }
-            return t.getFluidAmount() >= t.getCapacity() || face == EnumFacing.UP;
+            return forRender.amount >= oTank.tank.getCapacity() || face == EnumFacing.UP;
         } else {
             return false;
         }

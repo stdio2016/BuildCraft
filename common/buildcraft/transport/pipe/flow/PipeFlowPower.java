@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.function.ToLongFunction;
+
 import javax.annotation.Nonnull;
 
 import net.minecraft.entity.player.EntityPlayer;
@@ -22,7 +23,6 @@ import net.minecraft.util.math.RayTraceResult;
 
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 
 import buildcraft.api.core.EnumPipePart;
 import buildcraft.api.core.SafeTimeTracker;
@@ -71,6 +71,7 @@ public class PipeFlowPower extends PipeFlow implements IFlowPower, IDebuggable {
 
     public PipeFlowPower(IPipe pipe, NBTTagCompound nbt) {
         super(pipe, nbt);
+        isReceiver = nbt.getBoolean("isReceiver");
         sections = new EnumMap<>(EnumFacing.class);
         for (EnumFacing face : EnumFacing.VALUES) {
             sections.put(face, new Section(face));
@@ -80,7 +81,7 @@ public class PipeFlowPower extends PipeFlow implements IFlowPower, IDebuggable {
     @Override
     public NBTTagCompound writeToNbt() {
         NBTTagCompound nbt = super.writeToNbt();
-
+        nbt.setBoolean("isReceiver", isReceiver);
         return nbt;
     }
 
@@ -191,7 +192,6 @@ public class PipeFlowPower extends PipeFlow implements IFlowPower, IDebuggable {
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
         left.add("maxPower = " + LocaleUtil.localizeMj(maxPower));
         left.add("isReceiver = " + isReceiver);

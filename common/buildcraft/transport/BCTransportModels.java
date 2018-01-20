@@ -27,9 +27,13 @@ import buildcraft.lib.client.model.ModelPluggableItem;
 import buildcraft.lib.client.model.MutableQuad;
 import buildcraft.lib.expression.DefaultContexts;
 import buildcraft.lib.expression.FunctionContext;
-import buildcraft.lib.expression.node.value.NodeVariableString;
+import buildcraft.lib.expression.node.value.NodeVariableBoolean;
+import buildcraft.lib.expression.node.value.NodeVariableObject;
+import buildcraft.lib.misc.RenderUtil;
 import buildcraft.lib.misc.data.ModelVariableData;
 
+import buildcraft.transport.client.FacadeItemColours;
+import buildcraft.transport.client.PipeBlockColours;
 import buildcraft.transport.client.model.GateMeshDefinition;
 import buildcraft.transport.client.model.ModelGateItem;
 import buildcraft.transport.client.model.ModelPipe;
@@ -39,6 +43,7 @@ import buildcraft.transport.client.model.key.KeyPlugFacade;
 import buildcraft.transport.client.model.key.KeyPlugGate;
 import buildcraft.transport.client.model.key.KeyPlugLens;
 import buildcraft.transport.client.model.key.KeyPlugLightSensor;
+import buildcraft.transport.client.model.key.KeyPlugPowerAdaptor;
 import buildcraft.transport.client.model.key.KeyPlugPulsar;
 import buildcraft.transport.client.model.plug.ModelFacadeItem;
 import buildcraft.transport.client.model.plug.ModelLensItem;
@@ -71,17 +76,20 @@ public class BCTransportModels {
     private static final ModelVariableData GATE_VAR_DATA_STATIC;
 
     private static final ModelHolderVariable LENS, FILTER;
-    private static final NodeVariableString LENS_COLOUR, LENS_SIDE;
+    private static final NodeVariableBoolean LENS_HAS_COLOUR;
+    private static final NodeVariableObject<EnumDyeColor> LENS_COLOUR;
+    private static final NodeVariableObject<EnumFacing> LENS_SIDE;
 
     public static final ModelHolderStatic PULSAR_STATIC;
     public static final ModelHolderVariable PULSAR_DYNAMIC;
 
     private static final ModelHolderVariable STRIPES;
-    private static final NodeVariableString STRIPES_DIRECTION;
+    private static final NodeVariableObject<EnumFacing> STRIPES_DIRECTION;
 
     public static final IPluggableStaticBaker<KeyPlugPulsar> BAKER_PLUG_PULSAR;
     public static final IPluggableStaticBaker<KeyPlugBlocker> BAKER_PLUG_BLOCKER;
     public static final IPluggableStaticBaker<KeyPlugLightSensor> BAKER_PLUG_LIGHT_SENSOR;
+    public static final IPluggableStaticBaker<KeyPlugPowerAdaptor> BAKER_PLUG_POWER_ADAPTOR;
 
     static {
         BLOCKER = getModel("plugs/blocker.json");
@@ -94,20 +102,22 @@ public class BCTransportModels {
         GATE_VAR_DATA_STATIC = new ModelVariableData();
 
         FunctionContext fnCtx = DefaultContexts.createWithAll();
-        LENS_COLOUR = fnCtx.putVariableString("colour");
-        LENS_SIDE = fnCtx.putVariableString("side");
+        LENS_COLOUR = fnCtx.putVariableObject("colour", EnumDyeColor.class);
+        LENS_SIDE = fnCtx.putVariableObject("side", EnumFacing.class);
+        LENS_HAS_COLOUR = fnCtx.putVariableBoolean("has_colour");
         LENS = getModel("plugs/lens.json", fnCtx);
         FILTER = getModel("plugs/filter.json", fnCtx);
 
         PULSAR_DYNAMIC = getModel("plugs/pulsar_dynamic.json", PluggablePulsar.MODEL_FUNC_CTX);
 
         fnCtx = DefaultContexts.createWithAll();
-        STRIPES_DIRECTION = fnCtx.putVariableString("side");
+        STRIPES_DIRECTION = fnCtx.putVariableObject("side", EnumFacing.class);
         STRIPES = getModel("pipes/stripes.json", fnCtx);
 
         BAKER_PLUG_PULSAR = new PlugBakerSimple<>(PULSAR_STATIC::getCutoutQuads);
         BAKER_PLUG_BLOCKER = new PlugBakerSimple<>(BLOCKER::getCutoutQuads);
         BAKER_PLUG_LIGHT_SENSOR = new PlugBakerSimple<>(LIGHT_SENSOR::getCutoutQuads);
+        BAKER_PLUG_POWER_ADAPTOR = new PlugBakerSimple<>(POWER_ADAPTER::getCutoutQuads);
     }
 
     private static ModelHolderStatic getModel(String loc) {
@@ -127,13 +137,15 @@ public class BCTransportModels {
     }
 
     public static void fmlInit() {
-        Minecraft.getMinecraft().getRenderItem().getItemModelMesher().register(BCTransportItems.plugGate, GateMeshDefinition.INSTANCE);
+        Minecraft.getMinecraft().getRenderItem().getItemModelMesher().register(BCTransportItems.plugGate,
+            GateMeshDefinition.INSTANCE);
         ClientRegistry.bindTileEntitySpecialRenderer(TilePipeHolder.class, new RenderPipeHolder());
 
         PipeApiClient.registry.registerBaker(KeyPlugGate.class, PlugGateBaker.INSTANCE);
         PipeApiClient.registry.registerBaker(KeyPlugBlocker.class, BCTransportModels.BAKER_PLUG_BLOCKER);
         PipeApiClient.registry.registerBaker(KeyPlugPulsar.class, BCTransportModels.BAKER_PLUG_PULSAR);
         PipeApiClient.registry.registerBaker(KeyPlugLightSensor.class, BCTransportModels.BAKER_PLUG_LIGHT_SENSOR);
+        PipeApiClient.registry.registerBaker(KeyPlugPowerAdaptor.class, BCTransportModels.BAKER_PLUG_POWER_ADAPTOR);
         PipeApiClient.registry.registerBaker(KeyPlugLens.class, PlugBakerLens.INSTANCE);
         PipeApiClient.registry.registerBaker(KeyPlugFacade.class, PlugBakerFacade.INSTANCE);
 
@@ -147,6 +159,11 @@ public class BCTransportModels {
         PipeApiClient.registry.registerRenderer(PipeBehaviourStripes.class, PipeBehaviourRendererStripes.INSTANCE);
     }
 
+    public static void fmlPostInit() {
+        RenderUtil.registerBlockColour(BCTransportBlocks.pipeHolder, PipeBlockColours.INSTANCE);
+        RenderUtil.registerItemColour(BCTransportItems.plugFacade, FacadeItemColours.INSTANCE);
+    }
+
     @SubscribeEvent
     public static void onModelBake(ModelBakeEvent event) {
         IRegistry<ModelResourceLocation, IBakedModel> modelRegistry = event.getModelRegistry();
@@ -155,10 +172,15 @@ public class BCTransportModels {
         registerModel(modelRegistry, start + "pipe_item#inventory", ModelPipeItem.INSTANCE);
         registerModel(modelRegistry, start + "gate_item#inventory", ModelGateItem.INSTANCE);
         registerModel(modelRegistry, start + "lens_item#inventory", ModelLensItem.INSTANCE);
-        registerModel(modelRegistry, start + "plug_blocker#inventory", new ModelPluggableItem(BLOCKER.getCutoutQuads()));
+        registerModel(modelRegistry, start + "plug_blocker#inventory",
+            new ModelPluggableItem(BLOCKER.getCutoutQuads()));
         PluggablePulsar.setModelVariablesForItem();
-        registerModel(modelRegistry, start + "plug_pulsar#inventory", new ModelPluggableItem(PULSAR_STATIC.getCutoutQuads(), PULSAR_DYNAMIC.getCutoutQuads()));
-        registerModel(modelRegistry, start + "plug_light_sensor#inventory", new ModelPluggableItem(LIGHT_SENSOR.getCutoutQuads()));
+        registerModel(modelRegistry, start + "plug_pulsar#inventory",
+            new ModelPluggableItem(PULSAR_STATIC.getCutoutQuads(), PULSAR_DYNAMIC.getCutoutQuads()));
+        registerModel(modelRegistry, start + "plug_light_sensor#inventory",
+            new ModelPluggableItem(LIGHT_SENSOR.getCutoutQuads()));
+        registerModel(modelRegistry, start + "plug_power_adaptor#inventory",
+            new ModelPluggableItem(POWER_ADAPTER.getCutoutQuads()));
         registerModel(modelRegistry, start + "plug_facade#inventory", ModelFacadeItem.INSTANCE);
 
         PlugGateBaker.onModelBake();
@@ -170,7 +192,8 @@ public class BCTransportModels {
         PlugGateRenderer.onModelBake();
     }
 
-    private static void registerModel(IRegistry<ModelResourceLocation, IBakedModel> modelRegistry, String reg, IBakedModel val) {
+    private static void registerModel(IRegistry<ModelResourceLocation, IBakedModel> modelRegistry, String reg,
+        IBakedModel val) {
         modelRegistry.putObject(new ModelResourceLocation(reg), val);
     }
 
@@ -184,8 +207,9 @@ public class BCTransportModels {
     }
 
     private static void setupLensVariables(ModelHolderVariable model, EnumFacing side, EnumDyeColor colour) {
-        LENS_COLOUR.value = colour == null ? "clear" : colour.getName();
-        LENS_SIDE.value = side.getName();
+        LENS_COLOUR.value = colour == null ? EnumDyeColor.WHITE : colour;
+        LENS_SIDE.value = side;
+        LENS_HAS_COLOUR.value = colour != null;
         ModelVariableData varData = new ModelVariableData();
         varData.setNodes(model.createTickableNodes());
         varData.tick();
@@ -213,7 +237,7 @@ public class BCTransportModels {
     }
 
     public static MutableQuad[] getStripesDynQuads(EnumFacing side) {
-        STRIPES_DIRECTION.value = side.getName();
+        STRIPES_DIRECTION.value = side;
         return STRIPES.getCutoutQuads();
     }
 }

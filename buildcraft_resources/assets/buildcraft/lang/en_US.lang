@@ -164,25 +164,25 @@ direction.center.7=South
 direction.center.8=South-East
 
 buildcraft.fluid.empty=Empty
-buildcraft.fluid.static.milli.short=%s mB of %s
-buildcraft.fluid.static.bucket.short=%s B of %s
-buildcraft.fluid.static.milli.long=%s milli buckets of %s
-buildcraft.fluid.static.bucket.long=%s buckets of %s
+buildcraft.fluid.static.milli.short=%s mB
+buildcraft.fluid.static.bucket.short=%s B
+buildcraft.fluid.static.milli.long=%s milli buckets
+buildcraft.fluid.static.bucket.long=%s buckets
 
 buildcraft.fluid.empty.milli.short=0 / %s mB
 buildcraft.fluid.empty.bucket.short=0 / %s B
 buildcraft.fluid.empty.milli.long=Empty %s milli bucket tank
 buildcraft.fluid.empty.bucket.long=Empty %s bucket tank
 
-buildcraft.fluid.full.milli.short=%1$s / %1$s mB of %2$s
-buildcraft.fluid.full.bucket.short=%1$s / %1$s B of %2$s
-buildcraft.fluid.full.milli.long=Full %s milli bucket tank of %s
-buildcraft.fluid.full.bucket.long=Full %s bucket tank of %s
+buildcraft.fluid.full.milli.short=%1$s / %1$s mB
+buildcraft.fluid.full.bucket.short=%1$s / %1$s B
+buildcraft.fluid.full.milli.long=Full %s milli bucket tank
+buildcraft.fluid.full.bucket.long=Full %s bucket tank
 
-buildcraft.fluid.static.cap.milli.short=%s / %3$s mB of %2$s
-buildcraft.fluid.static.cap.bucket.short=%s / %3$s B of %2$s
-buildcraft.fluid.static.cap.milli.long=%s milli buckets of %s in a %s milli bucket tank
-buildcraft.fluid.static.cap.bucket.long=%s buckets of %s in a %s bucket tank
+buildcraft.fluid.static.cap.milli.short=%s / %s mB
+buildcraft.fluid.static.cap.bucket.short=%s / %s B
+buildcraft.fluid.static.cap.milli.long=%s milli buckets in a %s milli bucket tank
+buildcraft.fluid.static.cap.bucket.long=%s buckets in a %s bucket tank
 
 buildcraft.fluid.flow.milli.short=%s mB/t
 buildcraft.fluid.flow.bucket.short=%s B/s
@@ -193,8 +193,8 @@ buildcraft.mj.static.long=%s Minecraft Joules
 buildcraft.mj.static.short=%s MJ
 buildcraft.mj.flow.long=%s Minecraft Joules per tick
 buildcraft.mj.flow.short=%s MJ/t
-buildcraft.mj.flow.second.long=%s Minecraft Joules per second
-buildcraft.mj.flow.second.short=%s MJ/s
+buildcraft.mj.flow.seconds.long=%s Minecraft Joules per second
+buildcraft.mj.flow.seconds.short=%s MJ/s
 
 fillerpattern.clear=Clear
 fillerpattern.fill=Fill
@@ -203,11 +203,32 @@ fillerpattern.horizon=Horizon
 fillerpattern.pyramid=Pyramid
 fillerpattern.stairs=Stairs
 fillerpattern.box=Box
-fillerpattern.cylinder=Cylinder
 fillerpattern.frame=Frame
 fillerpattern.none=None
+fillerpattern.sphere_eighth=Eighth-Sphere
+fillerpattern.sphere_quarter=Quarter-sphere
+fillerpattern.sphere_half=Hemisphere
+fillerpattern.sphere=Sphere
+fillerpattern.2d_arc=Arc
+fillerpattern.2d_semi_circle=Semi-Circle
+fillerpattern.2d_circle=Circle
+fillerpattern.2d_triangle=Triangle
+fillerpattern.2d_square=Square
+fillerpattern.2d_pentagon=Pentagon
+fillerpattern.2d_hexagon=Hexagon
+fillerpattern.2d_octagon=Octagon
 fillerpattern.parameter.hollow=Hollow
 fillerpattern.parameter.filled=Filled
+fillerpattern.parameter.filled_outer=Surrounded
+
+buildcraft.param.rotation.0=No rotation
+buildcraft.param.rotation.1=90 degree rotation
+buildcraft.param.rotation.2=180 degree rotation
+buildcraft.param.rotation.3=270 degree rotation
+
+buildcraft.param.axis.x=X Axis
+buildcraft.param.axis.y=Y Axis
+buildcraft.param.axis.z=Z Axis
 
 fluid.oil=Oil
 fluid.fuel=Fuel
@@ -223,9 +244,27 @@ fluid.fuel_dense=Dense Fuel
 fluid.fuel_light=Fuel
 fluid.fuel_gaseous=Gaseous Fuel
 
-buildcraft.fluid.heat_0= (§bCool§r)
-buildcraft.fluid.heat_1= (§6Hot§r)
-buildcraft.fluid.heat_2= (§cSearing§r)
+buildcraft.fluid.heat_0=%s (§bCool§r)
+buildcraft.fluid.heat_1=%s (§6Hot§r)
+buildcraft.fluid.heat_2=%s (§cSearing§r)
+
+buildcraft.christmas.fluid.oil=Raw Chocolate Mix
+buildcraft.christmas.fluid.fuel=Milk Chocolate
+buildcraft.christmas.fluid.oil_distilled=Mixed Chocolates
+buildcraft.christmas.fluid.oil_heavy=Raw Chocolate
+buildcraft.christmas.fluid.oil_dense=Raw Heavy Chocolates
+buildcraft.christmas.fluid.oil_residue=Caramel Excess
+buildcraft.christmas.fluid.fuel_mixed_heavy=Darker Chocolate Mix
+buildcraft.christmas.fluid.fuel_mixed_light=Lighter Chocolate Mix
+buildcraft.christmas.fluid.fuel_dense=Dark Chocolate
+buildcraft.christmas.fluid.fuel_light=Milk Chocolate
+buildcraft.christmas.fluid.fuel_gaseous=White Chocolate
+
+buildcraft.christmas.buildcraft.fluid.heat_0=§bMelted§r %s
+buildcraft.christmas.buildcraft.fluid.heat_1=§6Bubbling§r %s
+buildcraft.christmas.buildcraft.fluid.heat_2=§cSearing§r %s
+
+buildcraft.christmas.tile.engineIron.name=Chocolate Engine
 
 gate.action.extraction=%s Extraction Preset
 gate.action.pipe.item.color=Paint Items %s
@@ -358,9 +397,9 @@ gui.pipes.emzuli.paint=Paint Items %s
 gui.pipes.emzuli.nopaint=Don't Paint Items
 gui.ledger.ownership=Owner
 gui.ledger.help=Help
-gui.counters=Counters
-gui.leftToBreak=Blocks left to break:
-gui.leftToPlace=Blocks left to place:
+gui.progress=Progress
+gui.leftToBreak=To break
+gui.leftToPlace=To place
 
 item.bucketFuel.name=Fuel Bucket
 item.bucketOil.name=Oil Bucket
@@ -401,6 +440,9 @@ item.gateCopier.name=Gate Copier
 item.plasticSheet.name=Plastic Sheet
 item.markerConnector.name=Marker Connector
 item.pulsar.name=Pipe Pulsar
+item.fragile_fluid_shard.name=Fragile %s Shard
+item.waterGel.name=Water Gelifier
+item.gel.name=Gelled Water
 
 item.buildcraft_pipe_wood_item.name=Wooden Transport Pipe
 item.buildcraft_pipe_cobblestone_item.name=Cobblestone Transport Pipe
@@ -456,7 +498,6 @@ item.PipeItemsSandstone.name=Sandstone Transport Pipe
 item.PipeFluidsSandstone.name=Sandstone Fluid Pipe
 item.PipePowerSandstone.name=Sandstone Kinesis Pipe
 
-
 item.PipeRobotStation.name=Docking Station
 item.Facade.name=Facade
 item.Facade.state_hollow=Hollow
@@ -472,9 +513,10 @@ item.PipePowerAdapter.name=Power Adapter
 item.debugger.name=Debugger
 item.debugger.warning=Use only for testing! Leaks secrets.
 item.package.name=Package
-item.guide.name=Guide Book
-item.guide_note.name=Guide Note
-item.robot_goggles.name=Robot Goggles
+item.buildcraft.guide.name=BuildCraft Guide Book
+item.buildcraft.guide_note.name=BuildCraft Guide Note
+item.buildcraft.robot_goggles.name=Robot Goggles
+item.buildcraft.filler_planner.name=Filler Planner
 
 itemGroup.buildcraft.boards=BuildCraft Robots
 itemGroup.buildcraft.main=BuildCraft
@@ -519,9 +561,7 @@ tile.stampingTableBlock.name=Stamping Table
 tile.tankBlock.name=Tank
 tile.zonePlan.name=Zone Planner
 tile.distiller.name=Distiller
-tile.heat_exchange_start.name=Heat Exchange (start)
-tile.heat_exchange_middle.name=Heat Exchange (middle)
-tile.heat_exchange_end.name=Heat Exchange (end)
+tile.heat_exchange.name=Heat Exchanger
 tile.decorated.blueprint.name=Blueprint (Decoration)
 tile.decorated.template.name=Template (Decoration)
 tile.decorated.laser_back.name=Laser (Decoration)
@@ -576,6 +616,9 @@ tip.gate.nocharge=No Charge
 
 tip.filler.excavate.on=Excavate
 tip.filler.excavate.off=Do Not Excavate
+
+tip.filler.invert.on=Invert
+tip.filler.invert.off=Do Not Invert
 
 tip.list.matches=Matches
 
@@ -650,6 +693,8 @@ chat.buildcraft.quarry.chunkloadInfo=[BuildCraft] The quarry at %d %d %d will ke
 
 command.buildcraft.version=BuildCraft %s for Minecraft %s (Latest: %s).
 command.buildcraft.changelog_header=Changelog for BuildCraft %s:
+command.buildcraft.version.fail=Version check failed! Check the log file for details.
+command.buildcraft.version.prerelease=You are using a pre-release build
 
 command.buildcraft.aliases=Aliases: %s
 command.buildcraft.help=Type '%s' for help.
@@ -731,3 +776,139 @@ command.buildcraft.buildcraft.op.format=Format: /%s
 command.buildcraft.buildcraft.deop.desc=- %s : Deop FakePlayer
 command.buildcraft.buildcraft.deop.help=Ungives OP rights to the BC FakePlayer (acts in the name of quarries, robots, etc.)
 command.buildcraft.buildcraft.deop.format=Format: /%s
+
+#advancements
+advancements.buildcraftcore.root.title=Buildcraft
+advancements.buildcraftcore.root.description=For all your engineering needs
+
+advancements.buildcraftcore.guide.title=How does this work again?
+advancements.buildcraftcore.guide.description=Check out the guide
+
+advancements.buildcraftcore.gears.title=Gearing up
+advancements.buildcraftcore.gears.description=Get one of each gear
+
+advancements.buildcraftcore.wrenched.title=Wrenched!
+advancements.buildcraftcore.wrenched.description=Use the wrench
+
+advancements.buildcraftcore.freePowar.title=Free Power!
+advancements.buildcraftcore.freePowar.description=Generate free power
+
+advancements.buildcraftcore.list.title=Sorting all the things
+advancements.buildcraftcore.list.description=Discover the advanced capabilities of the list
+
+advancements.buildcraftcore.engine.title=My first engine
+advancements.buildcraftcore.engine.description=Get your first engine
+
+advancements.buildcraftcore.markers.title=Marking your territory
+advancements.buildcraftcore.markers.description=Use volume markers to mark out an area
+
+advancements.buildcraftcore.path_markers.title=Defining the trail
+advancements.buildcraftcore.path_markers.description=Define a path
+
+advancements.buildcraftcore.paper.title=Paper collector
+advancements.buildcraftcore.paper.description=Use every piece of paper
+
+advancements.buildcraftenergy.poweringUp.title=Powering Up!
+advancements.buildcraftenergy.poweringUp.description=Activate a Stirling/Combustion engine with a redstone signal
+
+advancements.buildcraftenergy.lava_power.title=Lava Power
+advancements.buildcraftenergy.lava_power.description=Power a strling engine with a lava bucket
+
+advancements.buildcraftenergy.to_much_power.title=To much power!
+advancements.buildcraftenergy.to_much_power.description=Make an engine overheat and wackit it with a wrench
+
+advancements.buildcraftenergy.ice_cool.title=Ice cool
+advancements.buildcraftenergy.ice_cool.description=Cool a combustion engine with something else then water (if available)
+
+advancements.buildcraftenergy.sticky_dipping.title=Sticky dipping
+advancements.buildcraftenergy.sticky_dipping.description=Discover the sticky nature of oil
+
+advancements.buildcraftenergy.fine_riches.title=Fine riches
+advancements.buildcraftenergy.fine_riches.description=Find an oil biome
+
+advancements.buildcraftenergy.refine_and_redefine.title=Refine and redefine
+advancements.buildcraftenergy.refine_and_redefine.description=Produce a tank full of every single type of oil and fuel
+
+advancements.buildcraftfactory.fluid_storage.title=Fluid storage
+advancements.buildcraftfactory.fluid_storage.description=Store fluid in a tank
+
+advancements.buildcraftfactory.lazy_crafting.title=Lazy crafting
+advancements.buildcraftfactory.lazy_crafting.description=Make the autoworkbench work for you
+
+advancements.buildcraftfactory.retired_hopper.title=Retired hopper
+advancements.buildcraftfactory.retired_hopper.description=Put the chute back to work
+
+advancements.buildcraftfactory.flooding_the_world.title=Flooding the world
+advancements.buildcraftfactory.flooding_the_world.description=Flood the area with a floodgate
+
+advancements.buildcraftfactory.draining_the_world.title=Draining the world
+advancements.buildcraftfactory.draining_the_world.description=Use a pump to drain fluids from the world
+
+advancements.buildcraftfactory.oil_platform.title=Oil platform
+advancements.buildcraftfactory.oil_platform.description=Start Pumping up an oil spout
+
+advancements.buildcraftfactory.heating_and_distilling.title=Heating and Distilling
+advancements.buildcraftfactory.heating_and_distilling.description=Create a complete oil refining setup with a Distiller and a Heat Exchanger
+
+advancements.buildcraftfactory.black_gold.title=Black gold
+advancements.buildcraftfactory.black_gold.description=Completely pump out a large oil spout
+
+advancements.buildcraftsilicon.laser_power.title=Laser power
+advancements.buildcraftsilicon.laser_power.description=Make a laser
+
+advancements.buildcraftsilicon.precision_crafting.title=Precision crafting
+advancements.buildcraftsilicon.precision_crafting.description=Start crafting with an assembly table
+
+advancements.buildcrafttransport.pipe_dream.title=Pipe dream
+advancements.buildcrafttransport.pipe_dream.description=Place a pipe
+
+advancements.buildcrafttransport.pipe_diversification.title=Pipe diversification
+advancements.buildcrafttransport.pipe_diversification.description=Place a item, fluid, kinesis and structure pipe
+
+advancements.buildcrafttransport.plugging_the_gap.title=Plugging the gap
+advancements.buildcrafttransport.plugging_the_gap.description=Plug a pipe
+
+advancements.buildcrafttransport.logic_transportation.title=Logic transportation
+advancements.buildcrafttransport.logic_transportation.description=Connect pipe wires
+
+advancements.buildcrafttransport.extended_logic.title=Extended logic
+advancements.buildcrafttransport.extended_logic.description=Use a gate with extra slots
+
+advancements.buildcrafttransport.sealing_fluids.title=Sealing fluids
+advancements.buildcrafttransport.sealing_fluids.description=Smelt a cactus and craft is dye to produce pipe sealant
+
+advancements.buildcrafttransport.pipe_logic.title=Pipe logic
+advancements.buildcrafttransport.pipe_logic.description=Place a gate on a pipe
+
+advancements.buildcrafttransport.all_plugged_up.title=All plugged up
+advancements.buildcrafttransport.all_plugged_up.description=Attach one of each unique pluggable to a pipe
+
+advancements.buildcrafttransport.pipe_fanatic.title=Pipe fanatic
+advancements.buildcrafttransport.pipe_fanatic.description=Place down one of each type of pipe
+
+advancements.buildcrafttransport.categorizing_with_colors.title=Categorizing with colors
+advancements.buildcrafttransport.categorizing_with_colors.description=Setup a sorting setup using the power of colouring
+
+advancements.buildcrafttransport.colorful_electrician.title=Colorful electrician
+advancements.buildcrafttransport.colorful_electrician.description=Use 16 of each color of pipe wire to make your piping system more robust
+
+advancements.buildcraftbuilders.shaping_the_world.title=Shaping the world
+advancements.buildcraftbuilders.shaping_the_world.description=Craft and place a Quarry
+
+advancements.buildcraftbuilders.architect.title=Architect
+advancements.buildcraftbuilders.architect.description=Scan an area with an architect table and record it in a blueprint/template
+
+advancements.buildcraftbuilders.paving_the_way.title=Paving the way
+advancements.buildcraftbuilders.paving_the_way.description=Utilize the builder with a pathmarker to create a path
+
+advancements.buildcraftbuilders.diggy.title=Diggy diggy hole
+advancements.buildcraftbuilders.diggy.description=Have a 64x64 quarry finish
+
+advancements.buildcraftbuilders.start_of_something_big.title=Start of something big
+advancements.buildcraftbuilders.start_of_something_big.description=Build an extra-large structure with the builder
+
+advancements.buildcraftbuilders.building_for_the_future.title=Building for the future
+advancements.buildcraftbuilders.building_for_the_future.description=Set a filler on a loop for long term automation
+
+advancements.buildcraftbuilders.destroying_the_world.title=Destorying the world
+advancements.buildcraftbuilders.destroying_the_world.description=Have two or more 64 x 64 sized quarries running at once at full speed

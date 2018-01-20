@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.Queues;
 
 import net.minecraft.client.Minecraft;
@@ -250,7 +249,7 @@ public class GuiGuide extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        lastPartialTicks = partialTicks;
+        lastPartialTicks = partialTicks = mc.getRenderPartialTicks();
         minX = (width - PAGE_LEFT.width * 2) / 2;
         minY = (height - BOOK_COVER.height) / 2;
         mouse.setMousePosition(mouseX, mouseY);
@@ -265,7 +264,7 @@ public class GuiGuide extends GuiScreen {
         } catch (Throwable t) {
             // Temporary fix for crash report classes crashing so we can see the ACTUAL error
             t.printStackTrace();
-            throw Throwables.propagate(t);
+            throw new RuntimeException(t);
         }
     }
 
@@ -392,10 +391,8 @@ public class GuiGuide extends GuiScreen {
             chapter.reset();
         }
 
-        currentPage.renderFirstPage(minX + PAGE_LEFT_TEXT.x, minY + PAGE_LEFT_TEXT.y, PAGE_LEFT_TEXT.width,
-            PAGE_LEFT_TEXT.height);
-        currentPage.renderSecondPage(minX + PAGE_LEFT.width + PAGE_RIGHT_TEXT.x, minY + PAGE_RIGHT_TEXT.y,
-            PAGE_RIGHT_TEXT.width, PAGE_RIGHT_TEXT.height);
+        currentPage.renderFirstPage(minX + (int) PAGE_LEFT_TEXT.x, minY + (int) PAGE_LEFT_TEXT.y, (int) PAGE_LEFT_TEXT.width, (int) PAGE_LEFT_TEXT.height);
+        currentPage.renderSecondPage(minX + PAGE_LEFT.width + (int) PAGE_RIGHT_TEXT.x, minY + (int) PAGE_RIGHT_TEXT.y, (int) PAGE_RIGHT_TEXT.width, (int) PAGE_RIGHT_TEXT.height);
 
         int chapterIndex = 0;
         for (GuideChapter chapter : chapters) {
@@ -434,9 +431,9 @@ public class GuiGuide extends GuiScreen {
                 PEN_HIDDEN_WIDTH, h);
 
             if (tooltipStack != null) {
-                renderToolTip(tooltipStack, mouse.getX(), mouse.getY());
+                renderToolTip(tooltipStack, (int) mouse.getX(), (int) mouse.getY());
             } else if (!tooltip.isEmpty()) {
-                drawHoveringText(tooltip, mouse.getX(), mouse.getY());
+                drawHoveringText(tooltip, (int) mouse.getX(), (int) mouse.getY());
             }
         }
     }
@@ -451,12 +448,12 @@ public class GuiGuide extends GuiScreen {
         // Primary mouse button
         if (mouseButton == 0) {
             if (isOpen) {
-                int page0xMin = this.minX + PAGE_LEFT_TEXT.x;
-                int page0xMax = page0xMin + PAGE_LEFT_TEXT.width;
-                int page1xMin = this.minX + PAGE_LEFT.width + PAGE_RIGHT_TEXT.x;
-                int page1xMax = page1xMin + PAGE_RIGHT_TEXT.width;
-                int pageYMin = this.minY + PAGE_RIGHT_TEXT.y;
-                int pageYMax = pageYMin + PAGE_RIGHT_TEXT.height;
+                int page0xMin = this.minX + (int) PAGE_LEFT_TEXT.x;
+                int page0xMax = page0xMin + (int) PAGE_LEFT_TEXT.width;
+                int page1xMin = this.minX + PAGE_LEFT.width + (int) PAGE_RIGHT_TEXT.x;
+                int page1xMax = page1xMin + (int) PAGE_RIGHT_TEXT.width;
+                int pageYMin = this.minY + (int) PAGE_RIGHT_TEXT.y;
+                int pageYMax = pageYMin + (int) PAGE_RIGHT_TEXT.height;
 
                 GuidePageBase current = currentPage;
                 current.setFontRenderer(currentFont);

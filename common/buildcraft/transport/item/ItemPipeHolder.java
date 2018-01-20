@@ -10,15 +10,19 @@ import java.util.List;
 
 import gnu.trove.map.hash.TIntObjectHashMap;
 
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.creativetab.CreativeTabs;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.EnumDyeColor;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.NonNullList;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.TextFormatting;
+import net.minecraft.world.World;
 
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -27,9 +31,11 @@ import buildcraft.api.transport.pipe.IItemPipe;
 import buildcraft.api.transport.pipe.PipeApi;
 import buildcraft.api.transport.pipe.PipeDefinition;
 
+import buildcraft.lib.client.render.font.SpecialColourFontRenderer;
 import buildcraft.lib.item.IItemBuildCraft;
 import buildcraft.lib.misc.ColourUtil;
 import buildcraft.lib.misc.LocaleUtil;
+import buildcraft.lib.registry.TagManager;
 
 import buildcraft.transport.BCTransportBlocks;
 
@@ -39,18 +45,39 @@ public class ItemPipeHolder extends ItemBlock implements IItemBuildCraft, IItemP
     private String unlocalizedName;
     private CreativeTabs creativeTab;
 
-    public ItemPipeHolder(PipeDefinition definition) {
+    protected ItemPipeHolder(PipeDefinition definition, String tagId) {
         super(BCTransportBlocks.pipeHolder);
         this.definition = definition;
-        this.id = "item.pipe." + definition.identifier.getResourceDomain() + "." + definition.identifier.getResourcePath();
+        this.id = tagId;
         this.setMaxDamage(0);
         this.setHasSubtypes(true);
-        init();
+        if (!"".equals(id)) {
+            init();
+        }
+    }
+
+    /** Creates a new {@link ItemPipeHolder} without requiring a tag. */
+    public static ItemPipeHolder create(PipeDefinition definition) {
+        return new ItemPipeHolder(definition, "");
+    }
+
+    /** Creates a new {@link ItemPipeHolder} with a tag that will be taken from {@link TagManager}. */
+    public static ItemPipeHolder createAndTag(PipeDefinition definition) {
+        ResourceLocation reg = definition.identifier;
+        String tagId = "item.pipe." + reg.getResourceDomain() + "." + reg.getResourcePath();
+        return new ItemPipeHolder(definition, tagId);
     }
 
     public ItemPipeHolder registerWithPipeApi() {
         PipeApi.pipeRegistry.setItemForPipe(definition, this);
         return this;
+    }
+
+    @Override
+    public void getSubItems(CreativeTabs tab, NonNullList<ItemStack> items) {
+        if (this.isInCreativeTab(tab)) {
+            items.add(new ItemStack(this));
+        }
     }
 
     @Override
@@ -77,9 +104,15 @@ public class ItemPipeHolder extends ItemBlock implements IItemBuildCraft, IItemP
         int meta = stack.getMetadata();
         if (meta > 0 && meta <= 16) {
             EnumDyeColor colour = EnumDyeColor.byMetadata(meta - 1);
-            colourComponent = ColourUtil.getTextFullTooltip(colour) + " ";
+            colourComponent = ColourUtil.getTextFullTooltipSpecial(colour) + " ";
         }
         return colourComponent + super.getItemStackDisplayName(stack);
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    public FontRenderer getFontRenderer(ItemStack stack) {
+        return SpecialColourFontRenderer.INSTANCE;
     }
 
     // ItemBlock overrides these to point to the block
@@ -115,7 +148,7 @@ public class ItemPipeHolder extends ItemBlock implements IItemBuildCraft, IItemP
 
     @Override
     @SideOnly(Side.CLIENT)
-    public void addInformation(ItemStack stack, EntityPlayer player, List<String> tooltip, boolean advanced) {
+    public void addInformation(ItemStack stack, World world, List<String> tooltip, ITooltipFlag flag) {
         String tipName = "tip." + unlocalizedName.replace(".name", "").replace("item.", "");
         String localised = I18n.format(tipName);
         if (!localised.equals(tipName)) {

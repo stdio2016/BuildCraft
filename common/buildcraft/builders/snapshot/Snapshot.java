@@ -30,6 +30,7 @@ import buildcraft.lib.misc.HashUtil;
 import buildcraft.lib.misc.NBTUtilBC;
 import buildcraft.lib.misc.RotationUtil;
 import buildcraft.lib.misc.StringUtilBC;
+import buildcraft.lib.misc.VecUtil;
 import buildcraft.lib.misc.data.Box;
 import buildcraft.lib.net.PacketBufferBC;
 
@@ -98,6 +99,21 @@ public abstract class Snapshot {
         return indexToPos(size, i);
     }
 
+    @SuppressWarnings({"WeakerAccess", "unused"})
+    public static int getDataSize(int x, int y, int z) {
+        return x * y * z;
+    }
+
+    @SuppressWarnings({"WeakerAccess", "unused"})
+    public static int getDataSize(BlockPos size) {
+        return getDataSize(size.getX(), size.getY(), size.getZ());
+    }
+
+    @SuppressWarnings({"WeakerAccess", "unused"})
+    public int getDataSize() {
+        return getDataSize(size);
+    }
+
     public static NBTTagCompound writeToNBT(Snapshot snapshot) {
         NBTTagCompound nbt = snapshot.serializeNBT();
         nbt.setTag("type", NBTUtilBC.writeEnum(snapshot.getType()));
@@ -155,7 +171,6 @@ public abstract class Snapshot {
 
     public static class Key {
         public final byte[] hash;
-        @SuppressWarnings("WeakerAccess")
         @Nullable // for client storage
         public final Header header;
 
@@ -183,7 +198,6 @@ public abstract class Snapshot {
             header = nbt.hasKey("header") ? new Header(nbt.getCompoundTag("header")) : null;
         }
 
-        @SuppressWarnings("WeakerAccess")
         public Key(PacketBufferBC buffer) {
             hash = buffer.readByteArray();
             header = buffer.readBoolean() ? new Header(buffer) : null;
@@ -232,6 +246,7 @@ public abstract class Snapshot {
         public final Date created;
         public final String name;
 
+        @SuppressWarnings("WeakerAccess")
         public Header(Key key, UUID owner, Date created, String name) {
             this.key = key;
             this.owner = owner;
@@ -239,6 +254,7 @@ public abstract class Snapshot {
             this.name = name;
         }
 
+        @SuppressWarnings("WeakerAccess")
         public Header(NBTTagCompound nbt) {
             key = new Key(nbt.getCompoundTag("key"));
             owner = nbt.getUniqueId("owner");
@@ -303,27 +319,27 @@ public abstract class Snapshot {
     @SuppressWarnings("WeakerAccess")
     public abstract class BuildingInfo {
         public final BlockPos basePos;
+        public final BlockPos offsetPos;
         public final Rotation rotation;
         public final Box box = new Box();
 
         protected BuildingInfo(BlockPos basePos, Rotation rotation) {
             this.basePos = basePos;
+            this.offsetPos = basePos.add(offset.rotate(rotation));
             this.rotation = rotation;
             this.box.extendToEncompass(toWorld(BlockPos.ORIGIN));
-            this.box.extendToEncompass(toWorld(size.subtract(new BlockPos(1, 1, 1))));
+            this.box.extendToEncompass(toWorld(size.subtract(VecUtil.POS_ONE)));
         }
 
         public BlockPos toWorld(BlockPos blockPos) {
             return blockPos
                 .rotate(rotation)
-                .add(basePos)
-                .add(offset.rotate(rotation));
+                .add(offsetPos);
         }
 
         public BlockPos fromWorld(BlockPos blockPos) {
             return blockPos
-                .subtract(offset.rotate(rotation))
-                .subtract(basePos)
+                .subtract(offsetPos)
                 .rotate(RotationUtil.invert(rotation));
         }
 

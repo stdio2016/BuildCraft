@@ -18,6 +18,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.Nullable;
+
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -106,7 +108,8 @@ public class GlobalSavedDataSnapshots {
                         if (snapshotFile.getName().startsWith(snapshot.key.toString())) {
                             listBuilder.add(snapshot.key);
                         }
-                    } catch (Exception ignored) {
+                    } catch (IOException io) {
+                        new IOException("Failed to read the snapshot " + snapshotFile, io).printStackTrace();
                     }
                 }
             }
@@ -140,7 +143,9 @@ public class GlobalSavedDataSnapshots {
         listCache.clear();
     }
 
-    public Snapshot getSnapshot(Snapshot.Key key) {
+    @Nullable
+    public Snapshot getSnapshot(@Nullable Snapshot.Key key) {
+        if (key == null) return null;
         return snapshotsCache.getUnchecked(key).orElse(null);
     }
 

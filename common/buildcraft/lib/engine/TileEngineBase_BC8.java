@@ -12,13 +12,11 @@ import java.util.List;
 import javax.annotation.Nonnull;
 
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
 import net.minecraft.util.ITickable;
 import net.minecraft.world.biome.Biome;
 
@@ -68,7 +66,7 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
 
     public long currentOutput;// TODO: sync gui data
     public boolean isRedstonePowered = false;
-    private boolean isPumping = false;
+    protected boolean isPumping = false;
 
     /** The model variables, used to keep track of the various state-based variables. */
     public final ModelVariableData clientModelData = new ModelVariableData();
@@ -190,10 +188,6 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
         rotateIfInvalid();
     }
 
-    public boolean onActivated(EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY, float hitZ) {
-        return false;
-    }
-
     protected Biome getBiome() {
         // TODO: Cache this!
         return world.getBiome(getPos());
@@ -202,7 +196,7 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
     /** @return The heat of the current biome, in celsius. */
     protected float getBiomeHeat() {
         Biome biome = getBiome();
-        float temp = biome.getFloatTemperature(getPos());
+        float temp = biome.getTemperature(getPos());
         return Math.max(0, Math.min(30, temp * 15f));
     }
 
@@ -579,7 +573,6 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
     public void getDebugInfo(List<String> left, List<String> right, EnumFacing side) {
         left.add("facing = " + currentDirection);
         left.add("heat = " + LocaleUtil.localizeHeat(heat) + " -- " + String.format("%.2f %%", getHeatLevel()));
@@ -587,10 +580,13 @@ public abstract class TileEngineBase_BC8 extends TileBC_Neptune implements ITick
         left.add("stage = " + powerStage);
         left.add("progress = " + progress);
         left.add("last = " + LocaleUtil.localizeMjFlow(lastPower));
-        if (world.isRemote) {
-            left.add("Current Model Variables:");
-            clientModelData.addDebugInfo(left);
-        }
+    }
+
+    @SideOnly(Side.CLIENT)
+    @Override
+    public void getClientDebugInfo(List<String> left, List<String> right, EnumFacing side) {
+        left.add("Current Model Variables:");
+        clientModelData.addDebugInfo(left);
     }
 
     @Override

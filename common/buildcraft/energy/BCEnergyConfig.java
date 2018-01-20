@@ -1,10 +1,13 @@
 package buildcraft.energy;
 
+import java.time.LocalDateTime;
+import java.time.MonthDay;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import gnu.trove.set.TIntSet;
@@ -20,6 +23,7 @@ import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import buildcraft.api.core.BCLog;
 
 import buildcraft.lib.config.EnumRestartRequirement;
+import buildcraft.lib.misc.ConfigUtil;
 
 import buildcraft.core.BCCoreConfig;
 
@@ -30,12 +34,14 @@ public class BCEnergyConfig {
     public static final Set<ResourceLocation> excessiveBiomes = new HashSet<>();
     public static final Set<ResourceLocation> surfaceDepositBiomes = new HashSet<>();
     public static final Set<ResourceLocation> excludedBiomes = new HashSet<>();
+    public static SpecialEventType christmasEventStatus = SpecialEventType.DAY_ONLY;
 
     private static Property propEnableOilGeneration;
     private static Property propExcessiveBiomes;
     private static Property propSurfaceDepositBiomes;
     private static Property propExcludedBiomes;
     private static Property propExcludedDimensions;
+    private static Property propChristmasEventType;
 
     public static void preInit() {
         EnumRestartRequirement world = EnumRestartRequirement.WORLD;
@@ -67,11 +73,18 @@ public class BCEnergyConfig {
         propExcludedBiomes = BCCoreConfig.config.get("worldgen", "excludedBiomes", _excluded);
         propExcludedBiomes.setComment("Biome registry names (e.g. 'minecraft:hell','minecraft:jungle')"
             + " of biomes that should never generate oil.");
+        world.setTo(propExcludedBiomes);
 
         int[] _dims = { -1, 1 };
         propExcludedDimensions = BCCoreConfig.config.get("worldgen", "excludedDimensions", _dims);
         propExcludedDimensions.setComment("Dimension ID's (e.g. '-1' for the nether,'1' for the end)"
             + " of dimensions that should never generate oil.");
+        world.setTo(propExcludedDimensions);
+
+        propChristmasEventType =
+            BCCoreConfig.config.get("events", "christmas_chocolate", SpecialEventType.DAY_ONLY.lowerCaseName);
+        ConfigUtil.setEnumProperty(propChristmasEventType, SpecialEventType.values());
+        game.setTo(propChristmasEventType);
 
         reloadConfig(EnumRestartRequirement.GAME);
         BCCoreConfig.addReloadListener(BCEnergyConfig::reloadConfig);
@@ -80,7 +93,7 @@ public class BCEnergyConfig {
     public static void reloadConfig(EnumRestartRequirement restarted) {
         if (EnumRestartRequirement.WORLD.hasBeenRestarted(restarted)) {
 
-            addBiomeNames(propExcludedBiomes, excessiveBiomes);
+            addBiomeNames(propExcludedBiomes, excludedBiomes);
             addBiomeNames(propExcessiveBiomes, excessiveBiomes);
             addBiomeNames(propSurfaceDepositBiomes, surfaceDepositBiomes);
             excludedDimensions.clear();
@@ -88,6 +101,7 @@ public class BCEnergyConfig {
 
             if (EnumRestartRequirement.GAME.hasBeenRestarted(restarted)) {
                 enableOilGeneration = propEnableOilGeneration.getBoolean();
+                christmasEventStatus = ConfigUtil.parseEnumForConfig(propChristmasEventType, SpecialEventType.DAY_ONLY);
             } else {
                 validateBiomeNames();
             }
@@ -146,6 +160,34 @@ public class BCEnergyConfig {
             if (!ForgeRegistries.BIOMES.containsKey(test)) {
                 invalidDest.add(test);
             }
+        }
+    }
+
+    public enum SpecialEventType {
+        DISABLED,
+        DAY_ONLY,
+        MONTH,
+        ENABLED;
+
+        public final String lowerCaseName = name().toLowerCase(Locale.ROOT);
+
+        public boolean isEnabled(MonthDay date) {
+            if (this == DISABLED) {
+                return false;
+            }
+            if (this == ENABLED) {
+                return true;
+            }
+            LocalDateTime now = LocalDateTime.now();
+            if (now.getMonth() != date.getMonth()) {
+                return false;
+            }
+            if (this == MONTH) {
+                return true;
+            }
+            int thisDay = now.getDayOfMonth();
+            int wantedDay = date.getDayOfMonth();
+            return thisDay >= wantedDay - 1 && thisDay <= wantedDay + 1;
         }
     }
 }
