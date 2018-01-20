@@ -631,7 +631,7 @@ public abstract class SnapshotBuilder<T extends ITileForSnapshotBuilder> impleme
         }
 
         public long getTarget() {
-            return (long) (Math.sqrt(pos.distanceSq(tile.getBuilderPos())) * 10 * MjAPI.MJ);
+            return (long) (Math.sqrt(pos.distanceSq(tile.getBuilderPos())) * 1 * MjAPI.MJ);
         }
 
         public void writePayload(PacketBufferBC buffer) {
