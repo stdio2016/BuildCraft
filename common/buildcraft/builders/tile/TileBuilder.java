@@ -210,7 +210,11 @@ public class TileBuilder extends TileBC_Neptune
                 basePoses.addAll(PositionUtil.getAllOnPath(path.get(i - 1), path.get(i)));
             }
         } else {
+try {
             basePoses.add(pos.offset(world.getBlockState(pos).getValue(BlockBCBase_Neptune.PROP_FACING).getOpposite()));
+} catch (Exception x) {
+System.out.println("TileBuilder error: world.getBlockState(pos) is a "+world.getBlockState(pos).getBlock());
+}
         }
     }
 
