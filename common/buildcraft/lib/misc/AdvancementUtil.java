@@ -22,6 +22,11 @@ public class AdvancementUtil {
         if (player instanceof EntityPlayerMP) {
             EntityPlayerMP playerMP = (EntityPlayerMP) player;
             AdvancementManager advancementManager = playerMP.getServerWorld().getAdvancementManager();
+            System.out.println("gg.gg AdvancementManager "+(advancementManager != null));
+            if (advancementManager == null) {
+                System.out.println("gg.gg AdvancementManager is undefined. Your map might be corrupted");
+                return ;
+            }
             Advancement advancement = advancementManager.getAdvancement(advancementName);
             if (advancement != null) {
                 // never assume the advancement exists, we create them but they are removable by datapacks
