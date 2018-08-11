@@ -8,7 +8,6 @@ package buildcraft.transport.tile;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -21,6 +20,7 @@ import javax.annotation.Nonnull;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.EnumDyeColor;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -35,6 +35,7 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 
+import buildcraft.api.BCModules;
 import buildcraft.api.core.EnumPipePart;
 import buildcraft.api.core.InvalidInputDataException;
 import buildcraft.api.tiles.IDebuggable;
@@ -53,11 +54,11 @@ import buildcraft.lib.misc.data.IdAllocator;
 import buildcraft.lib.net.PacketBufferBC;
 import buildcraft.lib.tile.TileBC_Neptune;
 
+import buildcraft.silicon.plug.FilterEventHandler;
 import buildcraft.transport.BCTransportBlocks;
 import buildcraft.transport.pipe.Pipe;
 import buildcraft.transport.pipe.PipeEventBus;
 import buildcraft.transport.pipe.PluggableHolder;
-import buildcraft.transport.plug.FilterEventHandler;
 import buildcraft.transport.wire.WireManager;
 
 public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITickable, IDebuggable {
@@ -149,7 +150,7 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
                 pipe = new Pipe(this, nbt.getCompoundTag("pipe"));
                 eventBus.registerHandler(pipe.behaviour);
                 eventBus.registerHandler(pipe.flow);
-                if (pipe.flow instanceof IFlowItems) {
+                if (pipe.flow instanceof IFlowItems && BCModules.SILICON.isLoaded()) {
                     eventBus.registerHandler(FilterEventHandler.class);
                 }
             } catch (InvalidInputDataException e) {
@@ -183,7 +184,7 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
             this.pipe = new Pipe(this, definition);
             eventBus.registerHandler(pipe.behaviour);
             eventBus.registerHandler(pipe.flow);
-            if (pipe.flow instanceof IFlowItems) {
+            if (pipe.flow instanceof IFlowItems && BCModules.SILICON.isLoaded()) {
                 eventBus.registerHandler(FilterEventHandler.class);
             }
             int meta = stack.getMetadata();
@@ -194,7 +195,42 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
         scheduleRenderUpdate();
     }
 
-    public void refreshNeighbours() {
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        eventBus.fireEvent(new PipeEventTileState.Invalidate(this));
+        wireManager.invalidate();
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        eventBus.fireEvent(new PipeEventTileState.Validate(this));
+        wireManager.validate();
+    }
+
+    @Override
+    public void onChunkUnload() {
+        super.onChunkUnload();
+        eventBus.fireEvent(new PipeEventTileState.ChunkUnload(this));
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (pipe != null) {
+            pipe.onLoad();
+        }
+        wireManager.validate();
+    }
+
+    @Override
+    public void onNeighbourBlockChanged(Block block, BlockPos nehighbour) {
+        super.onNeighbourBlockChanged(block, nehighbour);
+        if (world.isRemote) {
+            return;
+        }
+
         for (EnumFacing face : EnumFacing.VALUES) {
             WeakReference<TileEntity> current = neighbourTiles.get(face);
             if (current != null) {
@@ -210,32 +246,8 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
                 neighbourTiles.put(face, new WeakReference<>(tile));
             }
         }
-    }
-
-    @Override
-    public void invalidate() {
-        super.invalidate();
-        eventBus.fireEvent(new PipeEventTileState.Invalidate(this));
-        wireManager.removeParts(new ArrayList<>(wireManager.parts.keySet()));
-    }
-
-    @Override
-    public void validate() {
-        super.validate();
-        eventBus.fireEvent(new PipeEventTileState.Validate(this));
-    }
-
-    @Override
-    public void onChunkUnload() {
-        super.onChunkUnload();
-        eventBus.fireEvent(new PipeEventTileState.ChunkUnload(this));
-    }
-
-    @Override
-    public void onLoad() {
-        super.onLoad();
         if (pipe != null) {
-            pipe.onLoad();
+            pipe.markForUpdate();
         }
     }
 
@@ -278,10 +290,7 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
             redrawBlock();
         }
 
-        if (!wireManager.inited) {
-            wireManager.updateBetweens(false);
-            wireManager.inited = true;
-        }
+        wireManager.tick();
 
         if (!Arrays.equals(redstoneValues, oldRedstoneValues)) {
             Block block = world.getBlockState(pos).getBlock();
@@ -348,7 +357,7 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
                     pipe = new Pipe(this, buffer, ctx);
                     eventBus.registerHandler(pipe.behaviour);
                     eventBus.registerHandler(pipe.flow);
-                    if (pipe.flow instanceof IFlowItems) {
+                    if (pipe.flow instanceof IFlowItems && BCModules.SILICON.isLoaded()) {
                         eventBus.registerHandler(FilterEventHandler.class);
                     }
                 } else if (pipe != null) {
@@ -419,6 +428,11 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
     }
 
     @Override
+    public boolean canPlayerInteract(EntityPlayer player) {
+        return canInteractWith(player);
+    }
+
+    @Override
     public PipePluggable getPluggable(EnumFacing side) {
         if (side == null) return null;
         return pluggables.get(side).pluggable;
@@ -436,10 +450,12 @@ public class TilePipeHolder extends TileBC_Neptune implements IPipeHolder, ITick
         if (pipe != null) {
             pipe.markForUpdate();
         }
-        if (!world.isRemote && old != with) {
-            wireManager.getWireSystems().rebuildWireSystemsAround(this);
+        if (!world.isRemote) {
+            if (old != with) {
+                wireManager.getWireSystems().rebuildWireSystemsAround(this);
+            }
+            holder.sendNewPluggableData();
         }
-        scheduleNetworkUpdate(PipeMessageReceiver.PLUGGABLES[side.getIndex()]);
         scheduleRenderUpdate();
         world.neighborChanged(pos.offset(side), BCTransportBlocks.pipeHolder, pos);
         return old;

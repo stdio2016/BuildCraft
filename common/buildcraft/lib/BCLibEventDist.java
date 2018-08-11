@@ -4,9 +4,12 @@
  * distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 package buildcraft.lib;
 
+import javax.annotation.Nullable;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiNewChat;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -44,6 +47,7 @@ import buildcraft.lib.client.render.laser.LaserRenderer_BC8;
 import buildcraft.lib.client.sprite.SpriteHolderRegistry;
 import buildcraft.lib.debug.BCAdvDebugging;
 import buildcraft.lib.debug.ClientDebuggables;
+import buildcraft.lib.item.ItemDebugger;
 import buildcraft.lib.marker.MarkerCache;
 import buildcraft.lib.misc.FakePlayerProvider;
 import buildcraft.lib.misc.MessageUtil;
@@ -51,6 +55,8 @@ import buildcraft.lib.misc.data.ModelVariableData;
 import buildcraft.lib.net.MessageDebugRequest;
 import buildcraft.lib.net.MessageManager;
 import buildcraft.lib.net.cache.BuildCraftObjectCaches;
+
+import buildcraft.core.client.ConfigGuiFactoryBC;
 
 public enum BCLibEventDist {
     INSTANCE;
@@ -120,14 +126,51 @@ public enum BCLibEventDist {
                 textWarn.appendSibling(componentVersion);
                 textWarn.appendText(" is in ALPHA!");
 
-                TextComponentString textReport = new TextComponentString("  Report bugs you find ");
+                TextComponentString textReport = new TextComponentString("  Report BuildCraft bugs you find ");
                 textReport.appendSibling(componentGithubLink);
 
-                TextComponentString textDesc = new TextComponentString("  and include the version ");
+                TextComponentString textDesc = new TextComponentString("  and include the BuildCraft version ");
                 textDesc.appendSibling(componentVersion);
                 textDesc.appendText(" in the description");
 
-                ITextComponent[] lines = { textWarn, textReport, textDesc };
+                TextComponentString textLag =
+                    new TextComponentString("  If you have performance problems then try disabling");
+                TextComponentString textConfigLink =
+                    new TextComponentString("everything in the BuildCraft perfomance config section.");
+                textConfigLink.setStyle(new Style() {
+
+                    {
+                        setUnderlined(true);
+                    }
+
+                    @Override
+                    public Style createShallowCopy() {
+                        return this;
+                    }
+
+                    @Override
+                    public Style createDeepCopy() {
+                        return this;
+                    }
+
+                    @Override
+                    @Nullable
+                    public ClickEvent getClickEvent() {
+                        // Very hacky, but it technically works
+                        StackTraceElement[] trace = new Throwable().getStackTrace();
+                        for (StackTraceElement elem : trace) {
+                            if (GuiScreen.class.getName().equals(elem.getClassName())) {
+                                ConfigGuiFactoryBC.GuiConfigManager newGui =
+                                    new ConfigGuiFactoryBC.GuiConfigManager(Minecraft.getMinecraft().currentScreen);
+                                Minecraft.getMinecraft().displayGuiScreen(newGui);
+                                return null;
+                            }
+                        }
+                        return null;
+                    }
+                });
+
+                ITextComponent[] lines = { textWarn, textReport, textDesc, textLag, textConfigLink };
                 GuiNewChat chat = Minecraft.getMinecraft().ingameGUI.getChatGUI();
                 for (ITextComponent line : lines) {
                     chat.printChatMessage(line);
@@ -184,13 +227,14 @@ public enum BCLibEventDist {
     }
 
     @SubscribeEvent
+    @SideOnly(Side.CLIENT)
     public static void clientTick(ClientTickEvent event) {
         if (event.phase == Phase.END) {
             BuildCraftObjectCaches.onClientTick();
             MessageUtil.postTick();
             Minecraft mc = Minecraft.getMinecraft();
             EntityPlayerSP player = mc.player;
-            if (player != null && player.capabilities.isCreativeMode && mc.gameSettings.showDebugInfo) {
+            if (player != null && ItemDebugger.isShowDebugInfo(player)) {
                 RayTraceResult mouseOver = mc.objectMouseOver;
                 if (mouseOver != null) {
                     IDebuggable debuggable = ClientDebuggables.getDebuggableObject(mouseOver);

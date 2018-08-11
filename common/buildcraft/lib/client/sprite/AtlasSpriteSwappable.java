@@ -21,6 +21,8 @@ import net.minecraft.util.ResourceLocation;
 
 import net.minecraftforge.fml.client.FMLClientHandler;
 
+import buildcraft.lib.BCLibConfig;
+
 /** Provides the basic implementation for */
 public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
     private TextureAtlasSprite current;
@@ -49,7 +51,7 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
             current.copyFrom(this);
             p.endSection();
         }
-        if (current.hasAnimationMetadata()) {
+        if (current.hasAnimationMetadata() && BCLibConfig.enableAnimatedSprites) {
             p.startSection("update");
             p.startSection(getIconName());
             current.updateAnimation();
@@ -91,14 +93,14 @@ public abstract class AtlasSpriteSwappable extends TextureAtlasSprite {
         return false;
     }
 
-    public static AtlasSpriteDirect loadSprite(String name, ResourceLocation location, boolean careIfMissing) {
+    public static TextureAtlasSprite loadSprite(String name, ResourceLocation location, boolean careIfMissing) {
         return loadSprite(Minecraft.getMinecraft().getResourceManager(), name, location, careIfMissing);
     }
 
-    public static AtlasSpriteDirect loadSprite(IResourceManager manager, String name, ResourceLocation location,
+    public static TextureAtlasSprite loadSprite(IResourceManager manager, String name, ResourceLocation location,
         boolean careIfMissing) {
         // Load the initial variant
-        AtlasSpriteDirect sprite = new AtlasSpriteDirect(name);
+        TextureAtlasSprite sprite = makeAtlasSprite(new ResourceLocation(name));
         try {
             // Copied almost directly from TextureMap.
             PngSizeInfo pngsizeinfo = PngSizeInfo.makeFromResource(manager.getResource(location));

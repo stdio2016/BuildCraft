@@ -9,6 +9,8 @@ package buildcraft.factory.tile;
 import java.io.IOException;
 import java.util.List;
 
+import javax.annotation.Nonnull;
+
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTUtil;
 import net.minecraft.util.EnumFacing;
@@ -57,8 +59,6 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
         caps.addCapabilityInstance(TilesAPI.CAP_HAS_WORK, () -> !isComplete, EnumPipePart.VALUES);
     }
 
-    protected abstract void initCurrentPos();
-
     protected abstract void mine();
 
     protected abstract IMjReceiver createMjReceiver();
@@ -86,8 +86,6 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
             sendNetworkUpdate(NET_LED_STATUS);
         }
 
-        initCurrentPos();
-
         mine();
     }
 
@@ -98,8 +96,8 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
     }
 
     @Override
-    public void invalidate() {
-        super.invalidate();
+    public void onRemove() {
+        super.onRemove();
         for (int y = pos.getY() - 1; y > 0; y--) {
             BlockPos blockPos = new BlockPos(pos.getX(), y, pos.getZ());
             if (world.getBlockState(blockPos).getBlock() == BCFactoryBlocks.tube) {
@@ -232,6 +230,7 @@ public abstract class TileMiner extends TileBC_Neptune implements ITickable, IDe
         left.add("progress = " + LocaleUtil.localizeMj(progress));
     }
 
+    @Nonnull
     @Override
     @SideOnly(Side.CLIENT)
     public AxisAlignedBB getRenderBoundingBox() {

@@ -54,6 +54,8 @@ import buildcraft.lib.misc.data.DelayedList;
 import buildcraft.lib.net.PacketBufferBC;
 import buildcraft.lib.net.cache.BuildCraftObjectCaches;
 
+import buildcraft.transport.pipe.behaviour.PipeBehaviourStone;
+
 public final class PipeFlowItems extends PipeFlow implements IFlowItems {
     private static final double EXTRACT_SPEED = 0.08;
     public static final int NET_CREATE_ITEM = 2;
@@ -250,13 +252,19 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
         World world = pipe.getHolder().getPipeWorld();
 
         List<TravellingItem> toTick = items.advance();
-        if (world.isRemote) {
-            // TODO: Client item advancing/intelligent stuffs
-            return;
-        }
+        long currentTime = world.getTotalWorldTime();
 
         for (TravellingItem item : toTick) {
+            if (item.tickFinished > currentTime) {
+                // Can happen if something ticks this tile multiple times in a single real tick
+                items.add((int) (item.tickFinished - currentTime), item);
+                continue;
+            }
             if (item.isPhantom) {
+                continue;
+            }
+            if (world.isRemote) {
+                // TODO: Client item advancing/intelligent stuffs
                 continue;
             }
             if (item.toCenter) {
@@ -315,21 +323,26 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
                 continue;
             }
             PipeEventItem.ModifySpeed modifySpeed = new PipeEventItem.ModifySpeed(holder, this, itemEntry, item.speed);
-            modifySpeed.modifyTo(0.04, 0.01);
-            holder.fireEvent(modifySpeed);
 
-            double target = modifySpeed.targetSpeed;
-            double maxDelta = modifySpeed.maxSpeedChange;
-            double nSpeed = item.speed;
-            if (nSpeed < target) {
-                nSpeed += maxDelta;
-                if (nSpeed > target) {
-                    nSpeed = target;
+            final double newSpeed;
+
+            if (holder.fireEvent(modifySpeed)) {
+                double target = modifySpeed.targetSpeed;
+                double maxDelta = modifySpeed.maxSpeedChange;
+                if (item.speed < target) {
+                    newSpeed = Math.min(target, item.speed + maxDelta);
+                } else if (item.speed > target) {
+                    newSpeed = Math.max(target, item.speed - maxDelta);
+                } else {
+                    newSpeed = item.speed;
                 }
-            } else if (nSpeed > target) {
-                nSpeed -= maxDelta;
-                if (nSpeed < target) {
-                    nSpeed = target;
+            } else {
+                // Nothing affected the speed
+                // so just fallback to a sensible default
+                if (item.speed > 0.03) {
+                    newSpeed = Math.max(0.03, item.speed - PipeBehaviourStone.SPEED_DELTA);
+                } else {
+                    newSpeed = item.speed;
                 }
             }
 
@@ -338,14 +351,14 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
                 destinations = findDest.generateRandomOrder();
             }
             if (destinations.size() == 0) {
-                dropItem(itemEntry.stack, null, item.side.getOpposite(), nSpeed);
+                dropItem(itemEntry.stack, null, item.side.getOpposite(), newSpeed);
             } else {
                 TravellingItem newItem = new TravellingItem(itemEntry.stack);
                 newItem.tried.addAll(item.tried);
                 newItem.toCenter = false;
                 newItem.colour = itemEntry.colour;
                 newItem.side = destinations.get(0);
-                newItem.speed = nSpeed;
+                newItem.speed = newSpeed;
                 newItem.genTimings(now, getPipeLength(newItem.side));
                 items.add(newItem.timeToDest, newItem);
                 sendItemDataToClient(newItem);
@@ -365,6 +378,7 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
         }
         if (pipe.isConnected(item.side)) {
             ConnectedType type = pipe.getConnectedType(item.side);
+            EnumFacing oppositeSide = item.side.getOpposite();
             switch (type) {
                 case PIPE: {
                     IPipe oPipe = pipe.getConnectedPipe(item.side);
@@ -374,28 +388,28 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
                     PipeFlow flow = oPipe.getFlow();
                     if (flow instanceof IFlowItems) {
                         IFlowItems oFlow = (IFlowItems) flow;
-                        excess = oFlow.injectItem(excess, true, item.side.getOpposite(), item.colour, item.speed);
-                        if (excess.isEmpty()) {
-                            return;
+                        ItemStack before = excess;
+                        excess = oFlow.injectItem(excess.copy(), true, oppositeSide, item.colour, item.speed);
+
+                        if (!excess.isEmpty()) {
+                            before.shrink(excess.getCount());
                         }
+
+                        excess = fireEventEjectIntoPipe(oFlow, item.side, before, excess);
                     }
                     break;
                 }
                 case TILE: {
                     TileEntity tile = pipe.getConnectedTile(item.side);
-                    IInjectable injectable = ItemTransactorHelper.getInjectable(tile, item.side.getOpposite());
-                    excess = injectable.injectItem(excess, true, item.side.getOpposite(), item.colour, item.speed);
-                    if (excess.isEmpty()) {
-                        return;
+                    IInjectable injectable = ItemTransactorHelper.getInjectable(tile, oppositeSide);
+                    ItemStack before = excess;
+                    excess = injectable.injectItem(excess.copy(), true, oppositeSide, item.colour, item.speed);
+
+                    if (!excess.isEmpty()) {
+                        IItemTransactor transactor = ItemTransactorHelper.getTransactor(tile, oppositeSide);
+                        excess = transactor.insert(excess, false, false);
                     }
-
-                    IItemTransactor transactor = ItemTransactorHelper.getTransactor(tile, item.side.getOpposite());
-                    excess = transactor.insert(excess, false, false);
-
-                    if (excess.isEmpty()) {
-                        return;
-                    }
-
+                    excess = fireEventEjectIntoTile(tile, item.side, before, excess);
                     break;
                 }
             }
@@ -409,6 +423,21 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
         item.genTimings(holder.getPipeWorld().getTotalWorldTime(), getPipeLength(item.side));
         items.add(item.timeToDest, item);
         sendItemDataToClient(item);
+    }
+
+    private ItemStack fireEventEjectIntoPipe(IFlowItems oFlow, EnumFacing to, ItemStack before, ItemStack excess) {
+        IPipeHolder holder = this.pipe.getHolder();
+        return fireEventEjected(holder, new PipeEventItem.Ejected.IntoPipe(holder, this, before, excess, to, oFlow));
+    }
+
+    private ItemStack fireEventEjectIntoTile(TileEntity tile, EnumFacing to, ItemStack before, ItemStack excess) {
+        IPipeHolder holder = this.pipe.getHolder();
+        return fireEventEjected(holder, new PipeEventItem.Ejected.IntoTile(holder, this, before, excess, to, tile));
+    }
+
+    private static ItemStack fireEventEjected(IPipeHolder holder, PipeEventItem.Ejected event) {
+        holder.fireEvent(event);
+        return event.getExcess();
     }
 
     private void dropItem(ItemStack stack, EnumFacing side, EnumFacing motion, double speed) {
@@ -550,12 +579,15 @@ public final class PipeFlowItems extends PipeFlow implements IFlowItems {
         return null;
     }
 
-    private double getPipeLength(EnumFacing side) {
+    double getPipeLength(EnumFacing side) {
         if (side == null) {
             return 0;
         }
         if (pipe.isConnected(side)) {
-            // TODO: Check the length between this pipes centre and the next block along
+            if (pipe.getConnectedType(side) == ConnectedType.TILE) {
+                // TODO: Check the length between this pipes centre and the next block along
+                return 0.5 + 0.25;// Tiny distance for fully pushing items in.
+            }
             return 0.5;
         } else {
             return 0.25;

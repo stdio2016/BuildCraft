@@ -92,7 +92,7 @@ public class TileBuilder extends TileBC_Neptune
     public final ItemHandlerSimple invResources =
         itemManager.addInvHandler("resources", 27, EnumAccess.BOTH, EnumPipePart.VALUES);
 
-    private final MjBattery battery = new MjBattery(1000 * MjAPI.MJ);
+    private final MjBattery battery = new MjBattery(16000 * MjAPI.MJ);
     private boolean canExcavate = true;
 
     /** Stores the real path - just a few block positions. */
@@ -395,7 +395,7 @@ System.out.println("TileBuilder error: world.getBlockState(pos) is a "+world.get
         return true;
     }
 
-    @SuppressWarnings("NullableProblems")
+    @Nonnull
     @Override
     @SideOnly(Side.CLIENT)
     public AxisAlignedBB getRenderBoundingBox() {

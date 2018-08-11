@@ -61,6 +61,7 @@ public class BCCoreConfig {
     private static Property propUseLongLocalizedName;
     private static Property propDisplayTimeGap;
     private static Property propUseSwappableSprites;
+    private static Property propEnableAnimatedSprites;
     private static Property propChunkLoadLevel;
     private static Property propItemRenderRotation;
     private static Property propItemLifespan;
@@ -84,6 +85,7 @@ public class BCCoreConfig {
         String general = Configuration.CATEGORY_GENERAL;
         String display = "display";
         String worldgen = "worldgen";
+        String performance = "performance";
 
         EnumRestartRequirement none = EnumRestartRequirement.NONE;
         EnumRestartRequirement world = EnumRestartRequirement.WORLD;
@@ -149,6 +151,11 @@ public class BCCoreConfig {
             "Disable this if you get texture errors with optifine. Disables some texture switching functionality "
                 + "when changing config options such as colour blind mode.");
         game.setTo(propUseSwappableSprites);
+
+        propEnableAnimatedSprites = config.get(performance, "enableAnimatedSprites", true);
+        propEnableAnimatedSprites.setComment(
+            "Disable this if you get sub-standard framerates due to buildcraft's ~60 sprites animating every frame.");
+        none.setTo(propEnableAnimatedSprites);
 
         propItemRenderRotation =
             config.get(display, "itemRenderRotation", RenderRotation.ENABLED.name().toLowerCase(Locale.ROOT));
@@ -216,6 +223,10 @@ public class BCCoreConfig {
 
     public static void postInit() {
         ConfigUtil.setLang(config);
+        saveConfigs();
+    }
+
+    public static void saveConfigs() {
         if (config.hasChanged()) {
             config.save();
         }
@@ -241,6 +252,7 @@ public class BCCoreConfig {
         BCLibConfig.displayTimeGap = ConfigUtil.parseEnumForConfig(propDisplayTimeGap, TimeGap.TICKS);
         BCLibConfig.rotateTravelingItems =
             ConfigUtil.parseEnumForConfig(propItemRenderRotation, RenderRotation.ENABLED);
+        BCLibConfig.enableAnimatedSprites = propEnableAnimatedSprites.getBoolean();
 
         if (EnumRestartRequirement.WORLD.hasBeenRestarted(restarted)) {
             BCLibConfig.chunkLoadingLevel =
@@ -253,11 +265,6 @@ public class BCCoreConfig {
             }
         }
         BCLibConfig.refreshConfigs();
-        if (config.hasChanged()) {
-            config.save();
-        }
-        if (objConfig.hasChanged()) {
-            objConfig.save();
-        }
+        saveConfigs();
     }
 }

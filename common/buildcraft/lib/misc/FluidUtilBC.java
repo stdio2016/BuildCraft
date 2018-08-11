@@ -33,6 +33,7 @@ import buildcraft.api.core.IFluidHandlerAdv;
 import buildcraft.lib.fluid.Tank;
 
 public class FluidUtilBC {
+
     public static void pushFluidAround(IBlockAccess world, BlockPos pos, Tank tank) {
         FluidStack potential = tank.drain(tank.getFluidAmount(), false);
         int drained = 0;
@@ -61,8 +62,10 @@ public class FluidUtilBC {
         if (drained > 0) {
             FluidStack actuallyDrained = tank.drain(drained, true);
             if (actuallyDrained == null || actuallyDrained.amount != drained) {
-                throw new IllegalStateException("Bad tank! Could drain " + working + " but only drained "
-                    + actuallyDrained + "( tank " + tank.getClass() + ")");
+                String strWorking = StringUtilBC.fluidToString(working);
+                String strActual = StringUtilBC.fluidToString(actuallyDrained);
+                throw new IllegalStateException("Bad tank! Could drain " + strWorking + " but only drained " + strActual
+                    + "( tank " + tank.getClass() + ")");
             }
         }
     }
@@ -123,7 +126,9 @@ public class FluidUtilBC {
         FluidStack drained = from.drain(toDrain, true);
         if (!toDrain.isFluidEqual(drained) || toDrain.amount != drained.amount) {
             String detail = "(To Drain = " + StringUtilBC.fluidToString(toDrain);
-            detail += ", actually drained = " + StringUtilBC.fluidToString(drained) + ")";
+            detail += ",\nactually drained = " + StringUtilBC.fluidToString(drained) + ")";
+            detail += ",\nIFluidHandler (from) = " + from.getClass() + "(" + from + ")";
+            detail += ",\nIFluidHandler (to) = " + to.getClass() + "(" + to + ")";
             throw new IllegalStateException("Drained fluid did not equal expected fluid!\n" + detail);
         }
         int actuallyAccepted = to.fill(drained, true);

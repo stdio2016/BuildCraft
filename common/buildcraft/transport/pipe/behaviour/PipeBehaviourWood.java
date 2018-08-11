@@ -17,7 +17,6 @@ import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fluids.FluidStack;
 
-import buildcraft.api.core.EnumPipePart;
 import buildcraft.api.mj.IMjConnector;
 import buildcraft.api.mj.IMjRedstoneReceiver;
 import buildcraft.api.mj.MjAPI;
@@ -30,12 +29,16 @@ import buildcraft.api.transport.pipe.IPipe.ConnectedType;
 import buildcraft.api.transport.pipe.PipeBehaviour;
 import buildcraft.api.transport.pipe.PipeEventFluid;
 import buildcraft.api.transport.pipe.PipeEventHandler;
+import buildcraft.api.transport.pipe.PipeFaceTex;
 
 import buildcraft.lib.inventory.filter.StackFilter;
 
 import buildcraft.transport.BCTransportConfig;
 
 public class PipeBehaviourWood extends PipeBehaviourDirectional implements IMjRedstoneReceiver, IDebuggable {
+
+    private static final PipeFaceTex TEX_CLEAR = PipeFaceTex.get(0);
+    private static final PipeFaceTex TEX_FILLED = PipeFaceTex.get(1);
 
     private final MjCapabilityHelper mjCaps = new MjCapabilityHelper(this);
 
@@ -48,8 +51,8 @@ public class PipeBehaviourWood extends PipeBehaviourDirectional implements IMjRe
     }
 
     @Override
-    public int getTextureIndex(EnumFacing face) {
-        return (face != null && face == getCurrentDir()) ? 1 : 0;
+    public PipeFaceTex getTextureData(EnumFacing face) {
+        return (face != null && face == getCurrentDir()) ? TEX_FILLED : TEX_CLEAR;
     }
 
     @Override
@@ -59,26 +62,13 @@ public class PipeBehaviourWood extends PipeBehaviourDirectional implements IMjRe
 
     @Override
     protected boolean canFaceDirection(EnumFacing dir) {
-        return pipe.getConnectedType(dir) == ConnectedType.TILE;
+        return dir != null && pipe.getConnectedType(dir) == ConnectedType.TILE;
     }
 
     @PipeEventHandler
     public void fluidSideCheck(PipeEventFluid.SideCheck sideCheck) {
         if (currentDir.face != null) {
             sideCheck.disallow(currentDir.face);
-        }
-    }
-
-    @Override
-    public void onTick() {
-        if (pipe.getHolder().getPipeWorld().isRemote) {
-            return;
-        }
-
-        if (currentDir == EnumPipePart.CENTER) {
-            advanceFacing();
-        } else if (!canFaceDirection(getCurrentDir())) {
-            currentDir = EnumPipePart.CENTER;
         }
     }
 

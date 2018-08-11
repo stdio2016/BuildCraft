@@ -75,18 +75,28 @@ public abstract class PipeBehaviourDirectional extends PipeBehaviour {
         EnumPipePart part) {
         if (EntityUtil.getWrenchHand(player) != null) {
             EntityUtil.activateWrench(player);
-            if (part.face != getCurrentDir()) {
-                if (part == EnumPipePart.CENTER) {
-                    return advanceFacing();
-                } else {
-                    if (canFaceDirection(part.face)) {
-                        setCurrentDir(part.face);
-                    }
-                }
+
+            if (part == EnumPipePart.CENTER) {
+                return advanceFacing();
+            } else if (part.face != getCurrentDir() && canFaceDirection(part.face)) {
+                setCurrentDir(part.face);
             }
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void onTick() {
+        if (pipe.getHolder().getPipeWorld().isRemote) {
+            return;
+        }
+
+        if (!canFaceDirection(getCurrentDir())) {
+            if (!advanceFacing()) {
+                setCurrentDir(null);
+            }
+        }
     }
 
     protected abstract boolean canFaceDirection(EnumFacing dir);
@@ -110,6 +120,9 @@ public abstract class PipeBehaviourDirectional extends PipeBehaviour {
     }
 
     protected void setCurrentDir(EnumFacing setTo) {
+        if (this.currentDir.face == setTo) {
+            return;
+        }
         this.currentDir = EnumPipePart.fromFacing(setTo);
         if (!pipe.getHolder().getPipeWorld().isRemote) {
             pipe.getHolder().scheduleNetworkUpdate(PipeMessageReceiver.BEHAVIOUR);

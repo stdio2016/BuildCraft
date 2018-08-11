@@ -23,7 +23,7 @@
   "conditions": [
     {
       "type": "minecraft:item_exists",
-      "item": "buildcraftbuilders:quarry"
+      "item": "buildcraftsilicon:laser"
     }
   ]
 }

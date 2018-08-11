@@ -57,6 +57,7 @@ import buildcraft.api.transport.pipe.PipeFlow;
 import buildcraft.lib.misc.CapUtil;
 import buildcraft.lib.misc.LocaleUtil;
 import buildcraft.lib.misc.MathUtil;
+import buildcraft.lib.misc.StringUtilBC;
 import buildcraft.lib.misc.VecUtil;
 import buildcraft.lib.net.PacketBufferBC;
 import buildcraft.lib.net.cache.BuildCraftObjectCaches;
@@ -206,11 +207,28 @@ public class PipeFlowFluids extends PipeFlow implements IFlowFluid, IDebuggable 
                 }
                 return extractSimple(mb, c, handler, simulate);
             }
-            if (!(handler instanceof IFluidHandlerAdv)) {
+            if (handler instanceof IFluidHandlerAdv) {
+                // This will likely be cheaper
+                IFluidHandlerAdv handlerAdv = (IFluidHandlerAdv) handler;
+                return handlerAdv.drain(filter, mb, !simulate);
+            }
+
+            // Search for the first valid fluid
+
+            IFluidTankProperties[] tanks = handler.getTankProperties();
+            if (tanks == null) {
                 return null;
             }
-            IFluidHandlerAdv handlerAdv = (IFluidHandlerAdv) handler;
-            return handlerAdv.drain(filter, mb, !simulate);
+            for (IFluidTankProperties tank : tanks) {
+                FluidStack contents = tank.getContents();
+                if (contents != null && filter.matches(contents)) {
+                    FluidStack extracted = extractSimple(mb, contents, handler, simulate);
+                    if (extracted != null) {
+                        return extracted;
+                    }
+                }
+            }
+            return null;
         };
         return tryExtractFluidInternal(millibuckets, from, extractor, simulate);
     }
@@ -264,7 +282,16 @@ public class PipeFlowFluids extends PipeFlow implements IFlowFluid, IDebuggable 
         }
         filter = filter.copy();
         filter.amount = millibuckets;
-        return handler.drain(filter, !simulate);
+        FluidStack drained = handler.drain(filter, !simulate);
+        if (drained != null) {
+            if (!filter.isFluidEqual(filter)) {
+                String detail = "(Filter = " + StringUtilBC.fluidToString(filter);
+                detail += ",\nactually drained = " + StringUtilBC.fluidToString(drained) + ")";
+                detail += ",\nIFluidHandler = " + handler.getClass() + "(" + handler + ")";
+                throw new IllegalStateException("Drained fluid did not equal filter fluid!\n" + detail);
+            }
+        }
+        return drained;
     }
 
     @Override

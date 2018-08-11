@@ -11,7 +11,7 @@ import buildcraft.api.core.render.ISprite;
 import buildcraft.api.statements.IGuiSlot;
 import buildcraft.api.statements.IStatementParameter;
 
-import buildcraft.lib.gui.GuiBC8;
+import buildcraft.lib.gui.BuildCraftGui;
 import buildcraft.lib.gui.GuiIcon;
 import buildcraft.lib.gui.IGuiElement;
 import buildcraft.lib.gui.IMenuElement;
@@ -20,14 +20,14 @@ import buildcraft.lib.statement.StatementWrapper;
 
 public class GuiElementStatementDrag implements IMenuElement {
 
-    public final GuiBC8<?> gui;
+    public final BuildCraftGui gui;
 
     private boolean isDragging;
 
     @Nullable
     private IGuiSlot dragging;
 
-    public GuiElementStatementDrag(GuiBC8<?> gui) {
+    public GuiElementStatementDrag(BuildCraftGui gui) {
         this.gui = gui;
     }
 
@@ -67,8 +67,7 @@ public class GuiElementStatementDrag implements IMenuElement {
             boolean canPlace = false;
             for (IGuiElement element : gui.getElementsAt(gui.mouse.getX(), gui.mouse.getY())) {
                 if (element instanceof IReference<?>) {
-                    IReference<?> ref = (IReference<?>) element;
-                    if (ref.canSet(dragging)) {
+                    if (checkCanSet((IReference<?>) element, dragging)) {
                         canPlace = true;
                         break;
                     }
@@ -100,6 +99,14 @@ public class GuiElementStatementDrag implements IMenuElement {
             }
             GlStateManager.color(1, 1, 1);
         }
+    }
+
+    private static <T> boolean checkCanSet(IReference<T> ref, Object value) {
+        if (value == null) {
+            return ref.canSet(null);
+        }
+        T obj = ref.convertToType(value);
+        return obj != null && ref.canSet(obj);
     }
 
     // IInteractableElement

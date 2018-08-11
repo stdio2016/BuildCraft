@@ -23,6 +23,7 @@ import javax.annotation.Nonnull;
 import com.google.common.collect.ImmutableList;
 
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTUtil;
@@ -32,11 +33,8 @@ import net.minecraft.world.IWorldEventListener;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.INBTSerializable;
-import net.minecraftforge.event.world.BlockEvent;
 
-import buildcraft.api.core.BuildCraftAPI;
 import buildcraft.api.mj.MjAPI;
 
 import buildcraft.lib.misc.BlockUtil;
@@ -47,7 +45,7 @@ import buildcraft.lib.net.PacketBufferBC;
 import buildcraft.lib.world.WorldEventListenerAdapter;
 
 public abstract class SnapshotBuilder<T extends ITileForSnapshotBuilder> implements INBTSerializable<NBTTagCompound> {
-    private static final int MAX_QUEUE_SIZE = 64;
+    private static final int MAX_QUEUE_SIZE = 16;
     @SuppressWarnings("WeakerAccess")
     protected static final byte CHECK_RESULT_UNKNOWN = 0;
     @SuppressWarnings("WeakerAccess")
@@ -60,7 +58,7 @@ public abstract class SnapshotBuilder<T extends ITileForSnapshotBuilder> impleme
     private static final byte REQUIRED_TRUE = 1;
     private static final byte REQUIRED_FALSE = 2;
     private static final int CHECKS_PER_TICK = 10;
-    private static final long MAX_POWER_PER_TICK = 10 * MjAPI.MJ;
+    private static final long MAX_POWER_PER_TICK = 256 * MjAPI.MJ;
 
     protected final T tile;
     private final IWorldEventListener worldEventListener = new WorldEventListenerAdapter() {
@@ -379,6 +377,14 @@ public abstract class SnapshotBuilder<T extends ITileForSnapshotBuilder> impleme
         tile.getWorldBC().profiler.endSection();
 
         tile.getWorldBC().profiler.startSection("do tasks");
+        long max = Math.min(
+            (long) (
+                MAX_POWER_PER_TICK *
+                    (double) (tile.getBattery().getStored() + MAX_POWER_PER_TICK / 10) /
+                    (tile.getBattery().getCapacity() * 2)
+            ),
+            MAX_POWER_PER_TICK
+        );
         tile.getWorldBC().profiler.startSection("break");
         if (!breakTasks.isEmpty()) {
             for (Iterator<BreakTask> iterator = breakTasks.iterator(); iterator.hasNext(); ) {
@@ -390,35 +396,25 @@ public abstract class SnapshotBuilder<T extends ITileForSnapshotBuilder> impleme
                 breakTask.power += tile.getBattery().extractPower(
                     0,
                     Math.min(
-                        Math.min(
-                            target - breakTask.power,
-                            tile.getBattery().getStored() / breakTasks.size()
-                        ),
-                        MAX_POWER_PER_TICK
+                        target - breakTask.power,
+                        max / breakTasks.size()
                     )
                 );
                 if (breakTask.power >= target) {
-                    BlockEvent.BreakEvent breakEvent = new BlockEvent.BreakEvent(
-                        tile.getWorldBC(),
+                    tile.getWorldBC().profiler.startSection("work");
+                    tile.getWorldBC().sendBlockBreakProgress(
+                        breakTask.pos.hashCode(),
                         breakTask.pos,
-                        tile.getWorldBC().getBlockState(breakTask.pos),
-                        BuildCraftAPI.fakePlayerProvider.getFakePlayer(
-                            (WorldServer) tile.getWorldBC(),
-                            tile.getOwner(),
-                            tile.getBuilderPos()
-                        )
+                        -1
                     );
-                    MinecraftForge.EVENT_BUS.post(breakEvent);
-                    if (!breakEvent.isCanceled()) {
-                        tile.getWorldBC().profiler.startSection("work");
-                        tile.getWorldBC().sendBlockBreakProgress(
-                            breakTask.pos.hashCode(),
-                            breakTask.pos,
-                            -1
-                        );
-                        tile.getWorldBC().destroyBlock(breakTask.pos, false);
-                        tile.getWorldBC().profiler.endSection();
-                    } else {
+                    Optional<List<ItemStack>> stacks = BlockUtil.breakBlockAndGetDrops(
+                        (WorldServer) tile.getWorldBC(),
+                        breakTask.pos,
+                        new ItemStack(Items.DIAMOND_PICKAXE),
+                        tile.getOwner()
+                    );
+                    tile.getWorldBC().profiler.endSection();
+                    if (!stacks.isPresent()) {
                         cancelBreakTask(breakTask);
                     }
                     if (check(breakTask.pos)) {
@@ -445,11 +441,8 @@ public abstract class SnapshotBuilder<T extends ITileForSnapshotBuilder> impleme
                 placeTask.power += tile.getBattery().extractPower(
                     0,
                     Math.min(
-                        Math.min(
-                            target - placeTask.power,
-                            tile.getBattery().getStored() / placeTasks.size()
-                        ),
-                        MAX_POWER_PER_TICK
+                        target - placeTask.power,
+                        max / placeTasks.size()
                     )
                 );
                 if (placeTask.power >= target) {

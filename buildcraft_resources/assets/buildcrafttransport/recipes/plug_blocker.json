@@ -16,7 +16,7 @@
   "conditions": [
     {
       "type": "minecraft:item_exists",
-      "item": "buildcraftbuilders:quarry"
+      "item": "buildcrafttransport:pipe_structure"
     }
   ]
 }
